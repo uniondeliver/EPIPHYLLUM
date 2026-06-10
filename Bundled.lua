@@ -17427,6 +17427,21 @@ end
 -- Return Task module.
 return Task
 end)
+__bundle_register("GUI/DefaultConfig", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Embedded default config (baked from the user's remotes.json). Loaded on
+-- startup when no personal autoload config is set, and seeded to disk as
+-- "Default.json" so it shows up in the Configs list.
+
+local DefaultConfig = {
+	Name = "Default.json",
+	Json = [[
+{"EP_RE_Path_17":"game.ReplicatedStorage.Requests.Combat","EP_RE_Action_27":"Counter","EP_HS_FacingOffset":false,"EP_RE_Arg_18":"\"Block\"","flag_number_1_23211629-7946-4AF2-97D9-E941C193B288":false,"EP_RE_Action_29":"FlashStep","EP_AutoDefenseKeybind":{"Toggled":true,"Mode":"Toggle"},"flag_number_1_0541D25A-97F5-46B8-A1C0-AF7DDA94BF81":"MouseButton2","EP_RE_Path_27":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_66D81CC3-0705-4FCA-A105-F4851D8ED3A2":false,"EP_RE_Path_29":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_595073F6-304C-4A93-8FD8-A8538D8AF06F":"","EP_AccentGradient":{"Color":"#373e45","Alpha":0},"flag_number_1_E0516AB0-8817-4E6E-BF2D-F56509361830":0,"flag_number_1_772342FB-B8DB-4A67-953B-38E909D7B7DC":"Block","flag_number_1_11340557-575F-43A3-9C5E-5240A02964F4":0,"flag_number_1_40898A21-C8CF-419D-8047-440EAF669F90":false,"flag_number_1_2556F3EB-1F1A-4552-AA9D-FAF8C4C819CE":false,"EP_RE_Action_20":"Counter","flag_number_1_DE27ED0D-C986-408C-8612-7699CCCA406E":false,"flag_number_1_84588A2F-52D3-49DB-BFAF-D5943D01A9D2":0.15,"EP_AllowFailure":false,"EP_RE_Action_9":"Forced Full Dodge","EP_RE_Arg_21":"","EP_RE_Arg_14":"","flag_number_1_341DF37D-B718-4291-9F37-2CC170995FB5":"Undefined","flag_number_1_6F0DD4C3-7BC0-491E-9357-A12AE858C6A5":"","flag_number_1_6047B5D8-5896-4E83-94F0-FE3EDFBEECB4":false,"EP_HS_HitboxSizeX":4,"flag_number_1_96ACD33F-348A-4866-9908-98ACC2C1D88F":"","EP_RE_Arg_24":"-73","flag_number_1_EEF6FBA0-BB50-491A-9805-371044BAC345":"MouseButton2","EP_RE_Path_6":"game.ReplicatedStorage.Requests.Dash","flag_number_1_3AA6FF0C-7EE8-4383-A0FC-D07409E3937F":"MouseButton2","BackgroundTransparency":0.14,"flag_number_1_741CFF57-953F-4DF3-8AEE-914302B5D59C":0,"EP_MusicVolume":30,"EP_AliasPlaceId":"11780443293","flag_number_1_F18B2CE2-6FCD-4D1E-B6A7-7DF461F9A735":0,"flag_number_1_1AC07DCA-CABF-4F0A-BBC5-017C725CBD7B":0,"EP_ConfigsName":"","flag_number_1_4890DAC2-E8FE-4A99-90D3-EC22643928D8":"","flag_number_1_C27827C5-5E63-41BF-9DE0-8A125CCA04AB":0.6,"flag_number_1_2C3C2EA6-F7F8-45E3-9BA0-32E2F95919C3":0,"EP_RE_Path_20":"game.ReplicatedStorage.Requests.RedCounter","flag_number_1_24223CCD-564C-4DBD-8D12-4EF5A0072F70":"Undefined","EP_HS_HitboxType":"Block","EP_RE_Arg_12":"","EP_RE_Arg_8":"\"Block\"","EP_HS_HitboxSizeZ":4,"EP_RE_Arg_3":"true","flag_number_1_27EE2ABE-7119-4E62-9AA1-9D8026276983":false,"EP_SkipIntroAnimation":false,"EP_RE_Arg_5":"","EP_RE_Arg_7":"\"LookVector\"","EP_RE_Arg_10":"","flag_number_1_B91819EF-B1B3-4CBD-9207-C39618F2275F":0,"flag_number_1_E5B12490-B775-40FC-9A2B-37307296B81F":0,"EP_IgnoreLocalPlayer":true,"EP_IgnoreMobs":false,"flag_number_1_A1D75078-3750-4822-A586-C19DA5DB6C8E":0.6,"flag_number_1_1B52A644-1885-4309-8220-28A174EC18D8":0,"flag_number_1_CCB65027-A4BF-48E2-92BD-AE3CD2517C68":"","EP_InputActive":true,"flag_number_1_3E92DC12-BA7E-4A21-BC69-F261FFEEA10C":"","flag_number_1_0F217C68-46FF-4503-A6E7-1E4C9FDE64BC":false,"flag_number_1_41432EAF-3949-4EAC-9931-204E5B7B7C12":false,"flag_number_1_3105D875-2C1A-49DB-8E33-06DEF3C8B479":"","EP_ShowAnimationVisualizer":true,"EP_RE_Arg_28":"","EP_HS_ShiftOffset":0,"EP_RE_Path_11":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_071E9D49-F785-48E5-9256-46F7067D70F6":1000,"flag_number_1_16AB451C-E938-4C85-BAD5-FD9B406D44B5":false,"flag_number_1_DAD4FFDB-BF82-46DD-921A-FDF4651F5DF9":"Parry","EP_MinimumLoggerDistance":0,"EP_RE_Action_17":"Parry","flag_number_1_B2544EDE-2D78-40A9-9623-9F49E004080E":false,"flag_number_1_B5875C2A-DA10-487B-AD4B-9F4D7D610BBA":0,"EP_RE_Action_25":"Forced Full Dodge","EP_EnabledActions":["Block","Counter","Dodge","FlashStep","Parry"],"EP_ShowWatermark":true,"EP_AccentColor":{"Color":"#0074e0","Alpha":0},"EP_RE_Action_22":"Dodge","EP_EnableAutoDefense":true,"EP_RE_Path_4":"","EP_PeriodicAutoSaveInterval":60,"flag_number_1_55D9ABC4-E9EE-48F0-B9A7-C8770E3C38B7":false,"flag_number_1_EB9AB0D0-CB45-4AE4-83F9-ECB0356F5AF2":"Parry","flag_number_1_87B66056-4650-4BEC-9EC6-42FA58A9746D":"","EP_EnableVisualizations":true,"EP_RE_Path_9":"game.ReplicatedStorage.Requests.FlashStep","EP_MenuKeybind":{"Key":"Enum.KeyCode.RightControl","Mode":"Toggle"},"flag_number_1_8D87ABDF-A77A-4E9D-B7C9-6E0649565A41":1000,"flag_number_1_E1BB3E39-CD39-4287-8E85-CCB3BD98AFF1":false,"flag_number_1_4C7BB35C-02EB-4376-AC82-8886D9D36CC7":0,"flag_number_1_35AD2A8C-8177-44E1-8338-2A98DBE1452F":false,"flag_number_1_915068A3-04EB-4B31-AC21-4C5DB0EF260E":false,"flag_number_1_91B2B142-6578-475D-90B6-38FB1311A1D3":"Unblock","flag_number_1_39664FD3-8407-47EF-9143-925972845C9E":0,"EP_RemoteConfigActive":true,"flag_number_1_207FECA0-4B04-4D4F-8824-7F13770805DB":0,"flag_number_1_9329AE77-2A82-44BD-B1E6-6A5C82CE140E":true,"EP_RE_Arg_26":"","flag_number_1_DE95E1CB-AEAC-48D1-B432-89FDC1C53041":false,"flag_number_1_33B27800-293D-4132-99FA-4DBBBF9F7BB1":"2000","EP_PeriodicAutoSave":true,"flag_number_1_0EB461DE-9888-46E3-ABFA-5396B2FE855C":false,"flag_number_1_D49A1D5B-7E8F-4B9B-95EE-B74A9ECA8836":"","EP_BlockFallback":false,"flag_number_1_4B98E6A4-DF17-4ED4-8822-D5A1BD9E9F91":0,"flag_number_1_22A43BF7-B91E-48A3-9302-A5E5A7B6F666":0,"flag_number_1_F8B7C664-AD34-4F9A-813F-D0A4F9BD9F6D":0.5,"flag_number_1_88AAFE03-5E84-4EB9-AA0B-F0956D25D321":"Parry","EP_ParryOnly":false,"flag_number_1_B87E6FB1-D27F-4478-9C0E-9984166ACBD8":0,"flag_number_1_CADE1181-3919-49AB-B443-6E497E7882B9":false,"flag_number_1_6E6A2AE5-E487-4F63-80C4-74114FC2F8C8":false,"EP_RE_Action_4":"Parry","EP_RE_Path_25":"game.ReplicatedStorage.Requests.FlashStep","EP_TriggerRemoteAction":"Parry","flag_number_1_AC7C061D-5A38-48DD-8275-00E0EE353B55":0,"flag_number_1_C91BEBE0-5D3A-46EB-95C5-596063DD248C":false,"EP_EnableNotifications":true,"flag_number_1_EAA905A5-57D5-4FF6-9360-29D3597D06C4":"","EP_RE_Arg_19":"true","EP_HS_HitDetection":false,"EP_IgnorePlayers":false,"flag_number_1_51C9C59D-5320-4246-B540-F31D8F868928":0,"EP_DodgeCancelDuration":0.5,"flag_number_1_7BF8B638-D3C4-43FE-B3D3-0D67F6599C3C":0,"flag_number_1_62B9D0E0-FAF7-4AB2-B953-82F7B1380686":"Block","flag_number_1_30A54637-0722-48DA-B9C6-36C9F288FCEA":false,"flag_number_1_6038FEBA-E475-41BE-83BC-0221073B4B57":false,"flag_number_1_A1FD9269-37B0-45D2-B7D9-A8689B26E3DE":false,"flag_number_1_93A34500-8BFA-4D5E-BD75-918AA1ED472C":0,"EP_RE_Path_13":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_AA7FD10F-8A85-4750-89BD-2DAC88AD3A6B":false,"EP_RE_Path_1":"game.ReplicatedStorage.Requests.Combat","EP_AutoDefenseFilters":["Disable When Textbox Focused"],"EP_SilentMode":false,"flag_number_1_E0A3E4FE-761C-45E8-80AE-FA5E177013AB":"","flag_number_1_3361AB22-3E4A-4923-825E-364F5145B270":false,"flag_number_1_5D0A3B20-F0D3-4239-8AFE-FF52CD08B526":"MouseButton2","EP_ShowMenuOnLaunch":true,"flag_number_1_154D3057-2B6F-4DB0-B0E2-9BECE87EF80E":true,"flag_number_1_118E469E-18D5-46B8-9618-F0C28C985294":false,"flag_number_1_723EC900-C4D6-4EF0-9DAC-DBC3800A9DBF":false,"flag_number_1_C040BFD9-1326-4091-B8DF-0FC5028383D2":true,"flag_number_1_AD4BD91D-F079-4689-AD2C-6979A97D350D":false,"flag_number_1_F41B944E-CFD5-4F88-8C78-BD847B432ACA":false,"flag_number_1_28B0966F-C773-49F8-9758-728A05BDEC03":"","EP_ShowInfoLogger":true,"flag_number_1_8228094A-A613-4D7B-B327-849548F30FA0":false,"EP_RE_Action_6":"Dodge","EP_DefaultPunishableWindow":0.7,"EP_RE_Path_22":"game.ReplicatedStorage.Requests.Dash","flag_number_1_A913D409-DB4F-4F32-964B-D1BD8F8BD5CB":false,"flag_number_1_5FD8BDE5-66A9-4806-A135-DDBE8CBF8D87":false,"flag_number_1_8617BB52-C798-4F8C-A5D4-A6860BD81ACE":"","flag_number_1_563341F4-CC35-4C90-8835-857126FFA78B":false,"flag_number_1_361FD33F-1F40-43B9-A4AC-B9D598FC5BCF":"","flag_number_1_3EF56EEA-37C1-4155-9A48-3D85CD9D7922":0,"flag_number_1_C966F757-6580-412E-B55B-F1823F6C1594":0,"flag_number_1_53798B99-F1D7-43AD-8BD0-3FDEF8DBB763":"","flag_number_1_AD571CD3-E649-4A57-9950-0F64F1E3D546":0,"flag_number_1_1F1E6CEC-74B2-4D58-8636-26C8AC857A06":false,"flag_number_1_8EBB9241-9A62-4B99-85E0-098E6112C5D9":"Undefined","EP_ShowKeybindList":false,"flag_number_1_38EF5E03-6EC7-427D-81C8-B3A417F46866":0,"EP_RE_Action_11":"Counter","flag_number_1_BAFFF21B-E2D1-4383-A981-BCFCF21524AA":1000,"flag_number_1_D2DFDBBB-9473-4474-AC30-35D0FD789F3D":0,"flag_number_1_9ABAABA1-BAC6-470D-ACE6-AD79F611BA28":0,"EP_TriggerInputAction":"Block","EP_ConfigsList":"remotes.json","flag_number_1_9944366A-C10F-4808-9C83-3E56D6457EFB":"","EP_RE_Arg_23":"\"LookVector\"","flag_number_1_E3A6F60C-0479-4837-B4B4-D3E5191F3D99":0,"EP_RE_Action_13":"FlashStep","flag_number_1_7AA1AA3C-161C-4DD2-AD4C-0F33CCF9D284":false,"EP_FailureRate":0,"flag_number_1_1321B08D-BFC7-4CE7-9A9F-F8361B71AF32":"","flag_number_1_732E1A43-C72D-43CF-BA75-593FBD706E13":"","EP_RE_Arg_30":"","flag_number_1_0B742014-B40B-48EA-AEF2-5D954DF91950":"","flag_number_1_492A0358-05F7-4FE0-AB07-D38AD9E916FC":0.6,"flag_number_1_07CE686D-5CBE-4DF8-826D-D01664C3D860":false,"flag_number_1_21FCD10A-0BF6-423C-8E91-89EEA07545F7":0,"EP_RE_Action_1":"Parry","flag_number_1_E0305B53-A7A6-42BB-AF48-EBCDAB74ED81":"","EP_DodgeCancel":false,"flag_number_1_BC8D9D8E-9F4B-4002-9CC5-57BF6D34039C":false,"flag_number_1_5BC082A2-53EC-474A-86CE-58F029E5ECD9":"","flag_number_1_7172C36B-6E54-42E0-A587-28E08EF3CCC1":true,"EP_DefaultAfterWindow":0.1,"EP_MaximumLoggerDistance":174,"EP_RE_Arg_2":"\"Block\"","flag_number_1_0E4CFC41-65D6-44F3-BBEE-9C741AE74D7C":0,"EP_HS_HitboxSizeY":4,"EP_MusicEnabled":false,"flag_number_1_1DC36614-4244-4532-A59D-FF3F5BEDDC7A":false,"EP_DodgeFallback":true,"flag_number_1_C7B55C8A-28B2-48C4-84BA-0AC7F3DD38FB":false,"flag_number_1_3A98FDA3-688B-47B0-83C9-80ABE8A2C1BA":0,"EP_MusicSource":"","flag_number_1_BAF6D42A-0614-4875-91FC-019812D7630D":"Unblock","flag_number_1_232D214F-64BC-4BB0-8EAD-6ED9CB4BCF96":false}
+]],
+}
+
+-- Return default config module.
+return DefaultConfig
+end)
 __bundle_register("GUI/Icons", function(require, _LOADED, __bundle_register, __bundle_modules)
 -- Embedded Lucide icons (white, 128x128, PNG, base64 encoded).
 return {
@@ -75080,6 +75095,7 @@ local Configuration = require("Utility/Configuration")
 local Library = require("GUI/Library")
 local SaveManager = require("Timings/SaveManager")
 local VisualsTab = require("Visuals/VisualsTab")
+local DefaultConfig = require("GUI/DefaultConfig")
 
 -- Set library reference for Configuration.
 Configuration.SetLibrary(Library)
@@ -77263,6 +77279,14 @@ Library.Folders.Directory = FolderName
 Library.Folders.Configs = FolderName .. "/Configs"
 if not isfolder(Library.Folders.Configs) then makefolder(Library.Folders.Configs) end
 
+-- Seed the embedded default config to disk so it appears in the Configs list.
+pcall(function()
+	local DefaultPath = Library.Folders.Configs .. "/" .. DefaultConfig.Name
+	if not isfile(DefaultPath) then
+		writefile(DefaultPath, DefaultConfig.Json)
+	end
+end)
+
 Library.Icons["minimize"] = IconAssets["minimize"] or ""
 Library.Icons["x"] = IconAssets["x"] or ""
 Library.Icons["shield"] = IconAssets["shield"] or ""
@@ -78378,7 +78402,7 @@ ConfigsSection:Button({
 	end,
 })
 
----Load autoload config.
+---Load autoload config, falling back to the embedded default when none is set.
 local function LoadAutoloadConfig()
 	local AutoloadPath = Library.Folders.Configs .. "/autoload.txt"
 	if isfile(AutoloadPath) then
@@ -78387,8 +78411,15 @@ local function LoadAutoloadConfig()
 		if AutoloadName and AutoloadName ~= "" and isfile(ConfigPath) then
 			Library:LoadConfig(readfile(ConfigPath))
 			ReloadDispatchConfigurationFromDisk()
+			return
 		end
 	end
+
+	-- No personal autoload set: apply the embedded default config.
+	pcall(function()
+		Library:LoadConfig(DefaultConfig.Json)
+		ReloadDispatchConfigurationFromDisk()
+	end)
 end
 
 Library:RefreshConfigsList(ConfigsDropdown)
