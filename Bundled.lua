@@ -18514,8 +18514,12 @@ local Library do
     end
 
     Library.NextFlag = function(self)
-        local FlagNumber = self.UnnamedFlags + 1
-        return StringFormat("flag_number_%s_%s", FlagNumber, HttpService:GenerateGUID(false))
+        -- Deterministic sequential flags (by UI creation order) so configs stay
+        -- portable across sessions and machines. A random GUID here would mean
+        -- auto-flagged elements get a different key every run, and LoadConfig
+        -- would silently drop those settings.
+        self.UnnamedFlags = self.UnnamedFlags + 1
+        return StringFormat("flag_number_%s", self.UnnamedFlags)
     end
 
     ---Add marquee (scroll-on-hover) behavior to a TextLabel inside a clipped container.
