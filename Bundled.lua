@@ -74955,6 +74955,7 @@ __bundle_register("__root", function(require, _LOADED, __bundle_register, __bund
 -- Hot reload: unload previous instance.
 local Environment = getgenv()
 
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 ---Unload script modules from a registry.
 ---@param ScriptModules table?
 local function UnloadScriptModules(ScriptModules)
@@ -75097,6 +75098,7 @@ end
 if Environment._EpiphyllumLib or Environment._EpiphyllumRuntime or Environment.__EpiphyllumScriptModules then
 	UnloadPreviousRuntime()
 end
+end -- scope block
 
 -- Clean up leftover UI from previous runs (search all possible parents).
 pcall(function()
@@ -75318,6 +75320,7 @@ getgenv().EpiphyllumSkipIntroAnimation = SkipIntroAnimation
 getgenv().EpiphyllumLaunchMenuLocked = true
 
 -- Place ID alias resolution — scan game folders for aliases.json containing this PlaceId.
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local PlaceIdStr = tostring(PlaceId)
 local AliasGamePath = nil
 local AliasGameFolderName = nil
@@ -75380,6 +75383,7 @@ if AliasGamePath then
 	GamePath = AliasGamePath
 	GameFolderName = AliasGameFolderName
 end
+end -- scope block
 
 -- Base64 decode lookup.
 local Base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -75635,6 +75639,7 @@ local PlayMusicSource = nil
 ---@param Stream table
 ---@param RequestId number
 ---@param Source string
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local function StartMusicStream(Stream, RequestId, Source)
 	StopMusicStream()
 	BgMusic:Stop()
@@ -75893,7 +75898,10 @@ function PlayMusicSource(Source, PlaylistVideoIds, PlaylistIndex)
 	end)
 end
 
+end -- scope block
+
 -- Write global modules to workspace (per-game).
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local GlobalsPath = GamePath .. "/Modules/Globals"
 
 local GlobalModules = {
@@ -76144,6 +76152,7 @@ for Name, Content in next, GlobalModules do
 		writefile(Path, Content)
 	end
 end
+end -- scope block
 
 -- Action types.
 -- Action to internal name mapping.
@@ -77574,7 +77583,7 @@ end
 -- BUILD ID — BUMP THIS ON EVERY UPDATE so you can tell who is on the latest
 -- build. Shown top-left in the menu (under the title) and in the watermark.
 -- =========================================================================
-local BUILD_ID = "2026.06.10b"
+local BUILD_ID = "2026.06.10c"
 getgenv().__EP_BuildId = BUILD_ID
 
 -- Create window.
@@ -77597,6 +77606,7 @@ InfoLogger.Init(GamePath)
 Window:Category("Combat")
 
 -- Defense page.
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local DefensePage = Window:Page({ Name = "Defense", Icon = IconAssets["shield"] or "" })
 
 -- Auto Defense section (section toggle = feature toggle).
@@ -77967,6 +77977,7 @@ InputSection:Button({
 		Library:Notification({ Title = "Error", Description = string.format("No input configured for '%s'.", Action), Duration = 3 })
 	end,
 })
+end -- scope block
 
 -- Hook Logger notifications to Library.
 Logger.SetNotifyCallback(function(Message, Duration)
@@ -78009,6 +78020,7 @@ VisualsTab.Init(Window, IconAssets)
 Window:Category("Utilities")
 
 -- Scripts page.
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local ScriptsPage = Window:Page({ Name = "Scripts", Icon = IconAssets["terminal"] or "" })
 local ScriptsSection = ScriptsPage:Section({ Name = "Scripts", Side = 1, Icon = IconAssets["zap"] or "", Collapsible = false })
 
@@ -78061,6 +78073,7 @@ ScriptsSection:Button({
 		RegisterScriptModule("MCPConnector", Module)
 	end,
 })
+end -- scope block
 
 Window:Category("Configuration")
 
@@ -78122,6 +78135,7 @@ MusicSection:Slider({
 	end,
 })
 
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local MusicSourceReady = false
 local MusicSourceTextbox = MusicSection:Textbox({
 	Flag = "EP_MusicSource",
@@ -78152,12 +78166,14 @@ MusicPlayButton:AddButton({
 		MusicSourceTextbox:Set("")
 	end,
 })
+end -- scope block
 
 -- Forward declarations for callbacks that reference later-created objects.
 local Watermark
 local WatermarkReady = false
 
 ---Apply silent-mode controlled UI visibility.
+do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local function ApplySilentModeUi()
 	local Suppressed = IsSilentModeSuppressed()
 
@@ -78350,6 +78366,7 @@ ShowKeybindListDepBox:Keybind({
 	end,
 })
 ShowKeybindListDepBox:SetupDependencies({ { ShowKeybindListToggle, true } })
+end -- scope block
 
 -- Theme.
 local ThemeSection = SettingsPage:Section({ Name = "Theme", Side = 1, Icon = IconAssets["palette"] or "", Collapsible = false })
