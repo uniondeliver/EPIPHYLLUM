@@ -13423,6 +13423,29 @@ end
 -- Return AnimationVisualizer module.
 return AnimationVisualizer
 end)
+__bundle_register("Core/DefaultRemotes", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Default dispatch config (remotes + inputs) baked into the script so anyone
+-- who executes it gets the auto-defense remotes/inputs without a local
+-- remotes.json. Used by LoadConfig() when no dispatch config exists on disk.
+-- Returns a FRESH copy each call so callers can mutate it safely.
+
+return function()
+	return {
+		inputs = {
+			{ action = "Block", key = "MouseButton2" },
+			{ action = "Unblock", key = "MouseButton2" },
+		},
+		remotes = {
+			{ action = "Parry", path = "game.ReplicatedStorage.Requests.Combat", args = { "\"Block\"", "true" } },
+			{ action = "Counter", path = "game.ReplicatedStorage.Requests.RedCounter", args = {} },
+			{ action = "Dodge", path = "game.ReplicatedStorage.Requests.Dash", args = { "\"LookVector\"", "-73" } },
+			{ action = "Forced Full Dodge", path = "game.ReplicatedStorage.Requests.FlashStep", args = {} },
+			{ action = "Counter", path = "game.ReplicatedStorage.Requests.FlashStep", args = {} },
+			{ action = "FlashStep", path = "game.ReplicatedStorage.Requests.FlashStep", args = {} },
+		},
+	}
+end
+end)
 __bundle_register("Core/Defense", function(require, _LOADED, __bundle_register, __bundle_modules)
 -- Defense orchestrator module.
 
@@ -74241,6 +74264,21 @@ local CONTAINER_NAME = "__EP_PlayerESP"
 local ALLY_COLOR = Color3.fromRGB(0, 255, 0)
 local ENEMY_COLOR = Color3.fromRGB(255, 0, 0)
 
+---Extract a Color3 from a colorpicker flag value (the library stores the
+---colorpicker object, whose actual Color3 lives in `.Color`).
+---@param Value any
+---@param Fallback Color3
+---@return Color3
+local function ToColor3(Value, Fallback)
+	if typeof(Value) == "Color3" then
+		return Value
+	end
+	if type(Value) == "table" and typeof(Value.Color) == "Color3" then
+		return Value.Color
+	end
+	return Fallback
+end
+
 -- Player ESP module.
 local PlayerESP = {}
 
@@ -74252,25 +74290,53 @@ local EngineMaid = Maid.new()
 local MySession = nil
 local GuiContainer = nil
 
----Resolve the safest GUI parent for the ESP container.
----@return Instance
-local function ResolveGuiParent()
+---Resolve the gethui() container if the executor exposes it.
+---@return Instance?
+local function TryGetHui()
 	local Ok, Hui = pcall(function()
 		return gethui()
 	end)
-	if Ok and Hui then
+	if Ok then
 		return Hui
 	end
-	return CoreGui
+	return nil
+end
+
+---Create the ESP ScreenGui using the same robust parenting sequence as the
+---script's working modules (CoreGui -> PlayerGui fallback -> gethui()).
+---@return ScreenGui
+local function CreateGuiContainer()
+	local ScreenGui = Instance.new("ScreenGui")
+	ScreenGui.Name = CONTAINER_NAME
+	ScreenGui.ResetOnSpawn = false
+	ScreenGui.DisplayOrder = 10
+
+	pcall(function()
+		ScreenGui.Parent = CoreGui
+	end)
+	if not ScreenGui.Parent then
+		ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+	end
+	pcall(function()
+		ScreenGui.Parent = gethui()
+	end)
+
+	return ScreenGui
 end
 
 ---Destroy leftover ESP containers from previous runs.
 local function CleanupLeftover()
-	for _, Parent in next, { CoreGui, ResolveGuiParent() } do
+	local Parents = { CoreGui, TryGetHui() }
+	pcall(function()
+		Parents[#Parents + 1] = LocalPlayer:FindFirstChild("PlayerGui")
+	end)
+
+	for _, Parent in next, Parents do
 		if Parent then
 			local Old = Parent:FindFirstChild(CONTAINER_NAME)
-			if Old then
+			while Old do
 				Old:Destroy()
+				Old = Parent:FindFirstChild(CONTAINER_NAME)
 			end
 		end
 	end
@@ -74343,7 +74409,7 @@ function ESPObject:ResolveColor()
 		end
 		return ENEMY_COLOR
 	end
-	return Configuration.ExpectOptionValue("EP_ESP_Player_Color") or Color3.new(1, 1, 1)
+	return ToColor3(Configuration.ExpectOptionValue("EP_ESP_Player_Color"), Color3.new(1, 1, 1))
 end
 
 ---Destroy all box adornments.
@@ -75100,6 +75166,7 @@ local Library = require("GUI/Library")
 local SaveManager = require("Timings/SaveManager")
 local VisualsTab = require("Visuals/VisualsTab")
 local DefaultConfig = require("GUI/DefaultConfig")
+local BuildDefaultRemotes = require("Core/DefaultRemotes")
 
 -- Set library reference for Configuration.
 Configuration.SetLibrary(Library)
@@ -76194,7 +76261,8 @@ local function LoadConfig()
 	local FilePath = GamePath .. "/remotes.json"
 
 	if not isfile(FilePath) then
-		return { remotes = {}, inputs = {} }
+		-- No local dispatch config: force the baked-in default remotes/inputs.
+		return BuildDefaultRemotes()
 	end
 
 	local Success, Result = pcall(function()
@@ -77502,10 +77570,17 @@ if not IsSilentModeSuppressed() and not SkipIntroAnimation then
 	end)
 end
 
+-- =========================================================================
+-- BUILD ID — BUMP THIS ON EVERY UPDATE so you can tell who is on the latest
+-- build. Shown top-left in the menu (under the title) and in the watermark.
+-- =========================================================================
+local BUILD_ID = "2026.06.10b"
+getgenv().__EP_BuildId = BUILD_ID
+
 -- Create window.
 local Window = Library:Window({
 	Name = "Epiphyllum",
-	SubName = GameName,
+	SubName = GameName .. "  ·  build " .. BUILD_ID,
 	Logo = IconAssets["sprout"] or "120959262762131",
 })
 
@@ -78429,7 +78504,7 @@ end
 Library:RefreshConfigsList(ConfigsDropdown)
 
 -- Watermark (hidden until fully ready).
-local WatermarkTitle = "Epiphyllum"
+local WatermarkTitle = "Epiphyllum · build " .. BUILD_ID
 Watermark = Library:Watermark(WatermarkTitle)
 Watermark:SetVisibility(false)
 
