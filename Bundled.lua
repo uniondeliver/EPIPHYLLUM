@@ -74568,9 +74568,7 @@ function PlayerESP.Init()
 
 	MySession = getgenv().__EP_ESPSession
 
-	GuiContainer = Instance.new("Folder")
-	GuiContainer.Name = CONTAINER_NAME
-	GuiContainer.Parent = ResolveGuiParent()
+	GuiContainer = CreateGuiContainer()
 	EngineMaid:Mark(GuiContainer)
 
 	for _, Player in next, Players:GetPlayers() do
@@ -77583,7 +77581,7 @@ end
 -- BUILD ID — BUMP THIS ON EVERY UPDATE so you can tell who is on the latest
 -- build. Shown top-left in the menu (under the title) and in the watermark.
 -- =========================================================================
-local BUILD_ID = "2026.06.10c"
+local BUILD_ID = "2026.06.10b"
 getgenv().__EP_BuildId = BUILD_ID
 
 -- Create window.
