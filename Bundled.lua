@@ -13423,28 +13423,77 @@ end
 -- Return AnimationVisualizer module.
 return AnimationVisualizer
 end)
-__bundle_register("Core/DefaultRemotes", function(require, _LOADED, __bundle_register, __bundle_modules)
--- Default dispatch config (remotes + inputs) baked into the script so anyone
--- who executes it gets the auto-defense remotes/inputs without a local
--- remotes.json. Used by LoadConfig() when no dispatch config exists on disk.
--- Returns a FRESH copy each call so callers can mutate it safely.
+__bundle_register("Core/CombatParry", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- CombatSystemClient parry helper.
+-- Fires perfect-block via the live Block module so AuthService tokens stay fresh.
 
-return function()
-	return {
-		inputs = {
-			{ action = "Block", key = "MouseButton2" },
-			{ action = "Unblock", key = "MouseButton2" },
-		},
-		remotes = {
-			{ action = "Parry", path = "game.ReplicatedStorage.Requests.Combat", args = { "\"Block\"", "true" } },
-			{ action = "Counter", path = "game.ReplicatedStorage.Requests.RedCounter", args = {} },
-			{ action = "Dodge", path = "game.ReplicatedStorage.Requests.Dash", args = { "\"LookVector\"", "-73" } },
-			{ action = "Forced Full Dodge", path = "game.ReplicatedStorage.Requests.FlashStep", args = {} },
-			{ action = "Counter", path = "game.ReplicatedStorage.Requests.FlashStep", args = {} },
-			{ action = "FlashStep", path = "game.ReplicatedStorage.Requests.FlashStep", args = {} },
-		},
-	}
+---@module Utility.Configuration
+local Configuration = require("Utility/Configuration")
+
+local CombatParry = {}
+
+-- Cached CombatSystemClient Block module.
+local CachedBlockModule = nil
+
+---Get the live CombatSystemClient Block module.
+---Calling its functions mints fresh auth tokens internally.
+---@return table?
+function CombatParry.GetBlockModule()
+	if CachedBlockModule then
+		return CachedBlockModule
+	end
+
+	local Ok, Module = pcall(function()
+		local RuntimeRequire = getfenv().require
+		local ReplicatedStorage = game:GetService("ReplicatedStorage")
+		local CSC = ReplicatedStorage:WaitForChild("CombatSystemClient", 5)
+		if not CSC then return nil end
+		local Combat = CSC:WaitForChild("Combat", 5)
+		local Base = Combat and Combat:WaitForChild("Base", 5)
+		if not Base then return nil end
+		local BlockModule = Base:WaitForChild("Block", 5)
+		if not BlockModule then return nil end
+		return RuntimeRequire(BlockModule)
+	end)
+	if not Ok or type(Module) ~= "table" then return nil end
+
+	CachedBlockModule = Module
+	return Module
 end
+
+---Whether the combat system is present (this game uses CombatSystemClient).
+---@return boolean
+function CombatParry.IsAvailable()
+	local Module = CombatParry.GetBlockModule()
+	return Module ~= nil and type(Module.Block) == "function"
+end
+
+---Create a parry callback (perfect-block / tap-block).
+---@return function
+function CombatParry.CreateCallback()
+	return function()
+		local Block = CombatParry.GetBlockModule()
+		if not Block or type(Block.Block) ~= "function" then
+			return false
+		end
+
+		-- Tap-block: enter block at predicted impact, release after the window.
+		local Ok = pcall(Block.Block)
+		if not Ok then return false end
+
+		if type(Block.Unblock) == "function" then
+			local Window = tonumber(Configuration.ExpectOptionValue("EP_CombatParryWindow")) or 0.30
+			task.delay(Window, function()
+				pcall(Block.Unblock)
+			end)
+		end
+
+		return true
+	end
+end
+
+-- Return CombatParry module.
+return CombatParry
 end)
 __bundle_register("Core/Defense", function(require, _LOADED, __bundle_register, __bundle_modules)
 -- Defense orchestrator module.
@@ -15223,7 +15272,6 @@ local RemoteToCategory = {
 	crouch = "Crouch",
 	startcrouch = "Crouch",
 	endcrouch = "Crouch",
-	flashstep = "FlashStep",
 }
 
 -- Stored remotes (arrays per action).
@@ -17450,21 +17498,6 @@ end
 -- Return Task module.
 return Task
 end)
-__bundle_register("GUI/DefaultConfig", function(require, _LOADED, __bundle_register, __bundle_modules)
--- Embedded default config (baked from the user's remotes.json). Loaded on
--- startup when no personal autoload config is set, and seeded to disk as
--- "Default.json" so it shows up in the Configs list.
-
-local DefaultConfig = {
-	Name = "Default.json",
-	Json = [[
-{"EP_RE_Path_17":"game.ReplicatedStorage.Requests.Combat","EP_RE_Action_27":"Counter","EP_HS_FacingOffset":false,"EP_RE_Arg_18":"\"Block\"","flag_number_1_23211629-7946-4AF2-97D9-E941C193B288":false,"EP_RE_Action_29":"FlashStep","EP_AutoDefenseKeybind":{"Toggled":true,"Mode":"Toggle"},"flag_number_1_0541D25A-97F5-46B8-A1C0-AF7DDA94BF81":"MouseButton2","EP_RE_Path_27":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_66D81CC3-0705-4FCA-A105-F4851D8ED3A2":false,"EP_RE_Path_29":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_595073F6-304C-4A93-8FD8-A8538D8AF06F":"","EP_AccentGradient":{"Color":"#373e45","Alpha":0},"flag_number_1_E0516AB0-8817-4E6E-BF2D-F56509361830":0,"flag_number_1_772342FB-B8DB-4A67-953B-38E909D7B7DC":"Block","flag_number_1_11340557-575F-43A3-9C5E-5240A02964F4":0,"flag_number_1_40898A21-C8CF-419D-8047-440EAF669F90":false,"flag_number_1_2556F3EB-1F1A-4552-AA9D-FAF8C4C819CE":false,"EP_RE_Action_20":"Counter","flag_number_1_DE27ED0D-C986-408C-8612-7699CCCA406E":false,"flag_number_1_84588A2F-52D3-49DB-BFAF-D5943D01A9D2":0.15,"EP_AllowFailure":false,"EP_RE_Action_9":"Forced Full Dodge","EP_RE_Arg_21":"","EP_RE_Arg_14":"","flag_number_1_341DF37D-B718-4291-9F37-2CC170995FB5":"Undefined","flag_number_1_6F0DD4C3-7BC0-491E-9357-A12AE858C6A5":"","flag_number_1_6047B5D8-5896-4E83-94F0-FE3EDFBEECB4":false,"EP_HS_HitboxSizeX":4,"flag_number_1_96ACD33F-348A-4866-9908-98ACC2C1D88F":"","EP_RE_Arg_24":"-73","flag_number_1_EEF6FBA0-BB50-491A-9805-371044BAC345":"MouseButton2","EP_RE_Path_6":"game.ReplicatedStorage.Requests.Dash","flag_number_1_3AA6FF0C-7EE8-4383-A0FC-D07409E3937F":"MouseButton2","BackgroundTransparency":0.14,"flag_number_1_741CFF57-953F-4DF3-8AEE-914302B5D59C":0,"EP_MusicVolume":30,"EP_AliasPlaceId":"11780443293","flag_number_1_F18B2CE2-6FCD-4D1E-B6A7-7DF461F9A735":0,"flag_number_1_1AC07DCA-CABF-4F0A-BBC5-017C725CBD7B":0,"EP_ConfigsName":"","flag_number_1_4890DAC2-E8FE-4A99-90D3-EC22643928D8":"","flag_number_1_C27827C5-5E63-41BF-9DE0-8A125CCA04AB":0.6,"flag_number_1_2C3C2EA6-F7F8-45E3-9BA0-32E2F95919C3":0,"EP_RE_Path_20":"game.ReplicatedStorage.Requests.RedCounter","flag_number_1_24223CCD-564C-4DBD-8D12-4EF5A0072F70":"Undefined","EP_HS_HitboxType":"Block","EP_RE_Arg_12":"","EP_RE_Arg_8":"\"Block\"","EP_HS_HitboxSizeZ":4,"EP_RE_Arg_3":"true","flag_number_1_27EE2ABE-7119-4E62-9AA1-9D8026276983":false,"EP_SkipIntroAnimation":false,"EP_RE_Arg_5":"","EP_RE_Arg_7":"\"LookVector\"","EP_RE_Arg_10":"","flag_number_1_B91819EF-B1B3-4CBD-9207-C39618F2275F":0,"flag_number_1_E5B12490-B775-40FC-9A2B-37307296B81F":0,"EP_IgnoreLocalPlayer":true,"EP_IgnoreMobs":false,"flag_number_1_A1D75078-3750-4822-A586-C19DA5DB6C8E":0.6,"flag_number_1_1B52A644-1885-4309-8220-28A174EC18D8":0,"flag_number_1_CCB65027-A4BF-48E2-92BD-AE3CD2517C68":"","EP_InputActive":true,"flag_number_1_3E92DC12-BA7E-4A21-BC69-F261FFEEA10C":"","flag_number_1_0F217C68-46FF-4503-A6E7-1E4C9FDE64BC":false,"flag_number_1_41432EAF-3949-4EAC-9931-204E5B7B7C12":false,"flag_number_1_3105D875-2C1A-49DB-8E33-06DEF3C8B479":"","EP_ShowAnimationVisualizer":true,"EP_RE_Arg_28":"","EP_HS_ShiftOffset":0,"EP_RE_Path_11":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_071E9D49-F785-48E5-9256-46F7067D70F6":1000,"flag_number_1_16AB451C-E938-4C85-BAD5-FD9B406D44B5":false,"flag_number_1_DAD4FFDB-BF82-46DD-921A-FDF4651F5DF9":"Parry","EP_MinimumLoggerDistance":0,"EP_RE_Action_17":"Parry","flag_number_1_B2544EDE-2D78-40A9-9623-9F49E004080E":false,"flag_number_1_B5875C2A-DA10-487B-AD4B-9F4D7D610BBA":0,"EP_RE_Action_25":"Forced Full Dodge","EP_EnabledActions":["Block","Counter","Dodge","FlashStep","Parry"],"EP_ShowWatermark":true,"EP_AccentColor":{"Color":"#0074e0","Alpha":0},"EP_RE_Action_22":"Dodge","EP_EnableAutoDefense":true,"EP_RE_Path_4":"","EP_PeriodicAutoSaveInterval":60,"flag_number_1_55D9ABC4-E9EE-48F0-B9A7-C8770E3C38B7":false,"flag_number_1_EB9AB0D0-CB45-4AE4-83F9-ECB0356F5AF2":"Parry","flag_number_1_87B66056-4650-4BEC-9EC6-42FA58A9746D":"","EP_EnableVisualizations":true,"EP_RE_Path_9":"game.ReplicatedStorage.Requests.FlashStep","EP_MenuKeybind":{"Key":"Enum.KeyCode.RightControl","Mode":"Toggle"},"flag_number_1_8D87ABDF-A77A-4E9D-B7C9-6E0649565A41":1000,"flag_number_1_E1BB3E39-CD39-4287-8E85-CCB3BD98AFF1":false,"flag_number_1_4C7BB35C-02EB-4376-AC82-8886D9D36CC7":0,"flag_number_1_35AD2A8C-8177-44E1-8338-2A98DBE1452F":false,"flag_number_1_915068A3-04EB-4B31-AC21-4C5DB0EF260E":false,"flag_number_1_91B2B142-6578-475D-90B6-38FB1311A1D3":"Unblock","flag_number_1_39664FD3-8407-47EF-9143-925972845C9E":0,"EP_RemoteConfigActive":true,"flag_number_1_207FECA0-4B04-4D4F-8824-7F13770805DB":0,"flag_number_1_9329AE77-2A82-44BD-B1E6-6A5C82CE140E":true,"EP_RE_Arg_26":"","flag_number_1_DE95E1CB-AEAC-48D1-B432-89FDC1C53041":false,"flag_number_1_33B27800-293D-4132-99FA-4DBBBF9F7BB1":"2000","EP_PeriodicAutoSave":true,"flag_number_1_0EB461DE-9888-46E3-ABFA-5396B2FE855C":false,"flag_number_1_D49A1D5B-7E8F-4B9B-95EE-B74A9ECA8836":"","EP_BlockFallback":false,"flag_number_1_4B98E6A4-DF17-4ED4-8822-D5A1BD9E9F91":0,"flag_number_1_22A43BF7-B91E-48A3-9302-A5E5A7B6F666":0,"flag_number_1_F8B7C664-AD34-4F9A-813F-D0A4F9BD9F6D":0.5,"flag_number_1_88AAFE03-5E84-4EB9-AA0B-F0956D25D321":"Parry","EP_ParryOnly":false,"flag_number_1_B87E6FB1-D27F-4478-9C0E-9984166ACBD8":0,"flag_number_1_CADE1181-3919-49AB-B443-6E497E7882B9":false,"flag_number_1_6E6A2AE5-E487-4F63-80C4-74114FC2F8C8":false,"EP_RE_Action_4":"Parry","EP_RE_Path_25":"game.ReplicatedStorage.Requests.FlashStep","EP_TriggerRemoteAction":"Parry","flag_number_1_AC7C061D-5A38-48DD-8275-00E0EE353B55":0,"flag_number_1_C91BEBE0-5D3A-46EB-95C5-596063DD248C":false,"EP_EnableNotifications":true,"flag_number_1_EAA905A5-57D5-4FF6-9360-29D3597D06C4":"","EP_RE_Arg_19":"true","EP_HS_HitDetection":false,"EP_IgnorePlayers":false,"flag_number_1_51C9C59D-5320-4246-B540-F31D8F868928":0,"EP_DodgeCancelDuration":0.5,"flag_number_1_7BF8B638-D3C4-43FE-B3D3-0D67F6599C3C":0,"flag_number_1_62B9D0E0-FAF7-4AB2-B953-82F7B1380686":"Block","flag_number_1_30A54637-0722-48DA-B9C6-36C9F288FCEA":false,"flag_number_1_6038FEBA-E475-41BE-83BC-0221073B4B57":false,"flag_number_1_A1FD9269-37B0-45D2-B7D9-A8689B26E3DE":false,"flag_number_1_93A34500-8BFA-4D5E-BD75-918AA1ED472C":0,"EP_RE_Path_13":"game.ReplicatedStorage.Requests.FlashStep","flag_number_1_AA7FD10F-8A85-4750-89BD-2DAC88AD3A6B":false,"EP_RE_Path_1":"game.ReplicatedStorage.Requests.Combat","EP_AutoDefenseFilters":["Disable When Textbox Focused"],"EP_SilentMode":false,"flag_number_1_E0A3E4FE-761C-45E8-80AE-FA5E177013AB":"","flag_number_1_3361AB22-3E4A-4923-825E-364F5145B270":false,"flag_number_1_5D0A3B20-F0D3-4239-8AFE-FF52CD08B526":"MouseButton2","EP_ShowMenuOnLaunch":true,"flag_number_1_154D3057-2B6F-4DB0-B0E2-9BECE87EF80E":true,"flag_number_1_118E469E-18D5-46B8-9618-F0C28C985294":false,"flag_number_1_723EC900-C4D6-4EF0-9DAC-DBC3800A9DBF":false,"flag_number_1_C040BFD9-1326-4091-B8DF-0FC5028383D2":true,"flag_number_1_AD4BD91D-F079-4689-AD2C-6979A97D350D":false,"flag_number_1_F41B944E-CFD5-4F88-8C78-BD847B432ACA":false,"flag_number_1_28B0966F-C773-49F8-9758-728A05BDEC03":"","EP_ShowInfoLogger":true,"flag_number_1_8228094A-A613-4D7B-B327-849548F30FA0":false,"EP_RE_Action_6":"Dodge","EP_DefaultPunishableWindow":0.7,"EP_RE_Path_22":"game.ReplicatedStorage.Requests.Dash","flag_number_1_A913D409-DB4F-4F32-964B-D1BD8F8BD5CB":false,"flag_number_1_5FD8BDE5-66A9-4806-A135-DDBE8CBF8D87":false,"flag_number_1_8617BB52-C798-4F8C-A5D4-A6860BD81ACE":"","flag_number_1_563341F4-CC35-4C90-8835-857126FFA78B":false,"flag_number_1_361FD33F-1F40-43B9-A4AC-B9D598FC5BCF":"","flag_number_1_3EF56EEA-37C1-4155-9A48-3D85CD9D7922":0,"flag_number_1_C966F757-6580-412E-B55B-F1823F6C1594":0,"flag_number_1_53798B99-F1D7-43AD-8BD0-3FDEF8DBB763":"","flag_number_1_AD571CD3-E649-4A57-9950-0F64F1E3D546":0,"flag_number_1_1F1E6CEC-74B2-4D58-8636-26C8AC857A06":false,"flag_number_1_8EBB9241-9A62-4B99-85E0-098E6112C5D9":"Undefined","EP_ShowKeybindList":false,"flag_number_1_38EF5E03-6EC7-427D-81C8-B3A417F46866":0,"EP_RE_Action_11":"Counter","flag_number_1_BAFFF21B-E2D1-4383-A981-BCFCF21524AA":1000,"flag_number_1_D2DFDBBB-9473-4474-AC30-35D0FD789F3D":0,"flag_number_1_9ABAABA1-BAC6-470D-ACE6-AD79F611BA28":0,"EP_TriggerInputAction":"Block","EP_ConfigsList":"remotes.json","flag_number_1_9944366A-C10F-4808-9C83-3E56D6457EFB":"","EP_RE_Arg_23":"\"LookVector\"","flag_number_1_E3A6F60C-0479-4837-B4B4-D3E5191F3D99":0,"EP_RE_Action_13":"FlashStep","flag_number_1_7AA1AA3C-161C-4DD2-AD4C-0F33CCF9D284":false,"EP_FailureRate":0,"flag_number_1_1321B08D-BFC7-4CE7-9A9F-F8361B71AF32":"","flag_number_1_732E1A43-C72D-43CF-BA75-593FBD706E13":"","EP_RE_Arg_30":"","flag_number_1_0B742014-B40B-48EA-AEF2-5D954DF91950":"","flag_number_1_492A0358-05F7-4FE0-AB07-D38AD9E916FC":0.6,"flag_number_1_07CE686D-5CBE-4DF8-826D-D01664C3D860":false,"flag_number_1_21FCD10A-0BF6-423C-8E91-89EEA07545F7":0,"EP_RE_Action_1":"Parry","flag_number_1_E0305B53-A7A6-42BB-AF48-EBCDAB74ED81":"","EP_DodgeCancel":false,"flag_number_1_BC8D9D8E-9F4B-4002-9CC5-57BF6D34039C":false,"flag_number_1_5BC082A2-53EC-474A-86CE-58F029E5ECD9":"","flag_number_1_7172C36B-6E54-42E0-A587-28E08EF3CCC1":true,"EP_DefaultAfterWindow":0.1,"EP_MaximumLoggerDistance":174,"EP_RE_Arg_2":"\"Block\"","flag_number_1_0E4CFC41-65D6-44F3-BBEE-9C741AE74D7C":0,"EP_HS_HitboxSizeY":4,"EP_MusicEnabled":false,"flag_number_1_1DC36614-4244-4532-A59D-FF3F5BEDDC7A":false,"EP_DodgeFallback":true,"flag_number_1_C7B55C8A-28B2-48C4-84BA-0AC7F3DD38FB":false,"flag_number_1_3A98FDA3-688B-47B0-83C9-80ABE8A2C1BA":0,"EP_MusicSource":"","flag_number_1_BAF6D42A-0614-4875-91FC-019812D7630D":"Unblock","flag_number_1_232D214F-64BC-4BB0-8EAD-6ED9CB4BCF96":false}
-]],
-}
-
--- Return default config module.
-return DefaultConfig
-end)
 __bundle_register("GUI/Icons", function(require, _LOADED, __bundle_register, __bundle_modules)
 -- Embedded Lucide icons (white, 128x128, PNG, base64 encoded).
 return {
@@ -18537,12 +18570,8 @@ local Library do
     end
 
     Library.NextFlag = function(self)
-        -- Deterministic sequential flags (by UI creation order) so configs stay
-        -- portable across sessions and machines. A random GUID here would mean
-        -- auto-flagged elements get a different key every run, and LoadConfig
-        -- would silently drop those settings.
-        self.UnnamedFlags = self.UnnamedFlags + 1
-        return StringFormat("flag_number_%s", self.UnnamedFlags)
+        local FlagNumber = self.UnnamedFlags + 1
+        return StringFormat("flag_number_%s_%s", FlagNumber, HttpService:GenerateGUID(false))
     end
 
     ---Add marquee (scroll-on-hover) behavior to a TextLabel inside a clipped container.
@@ -28258,41 +28287,6 @@ end
 -- Return AnimationTiming module.
 return AnimationTiming
 end)
-__bundle_register("Timings/EmbeddedTimings", function(require, _LOADED, __bundle_register, __bundle_modules)
--- Embedded default timings (baked into the script so anyone who executes
--- it gets these auto-defense timings without needing local save files).
--- Generated from the user's Type Soul timing set (85 animation + 1 part).
--- Decoded at runtime; SaveManager merges these (disk saves take precedence).
-
-local HttpService = game:GetService("HttpService")
-
--- Raw JSON arrays (one per timing type). Newline-padded so the trailing
--- JSON ']' never collides with the long-bracket close.
-local Raw = {}
-Raw.animation = [[
-[{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":31,"X":27,"Z":38},"when":500,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://13831954897","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"AerialAce","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":213,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"pqrry","hitbox":{"Y":39,"X":38,"Z":36},"when":300,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://107507023089925","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"BatFly","hitbox":{"Y":31,"X":36,"Z":33},"fhb":true,"imdd":0,"duih":true,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":165,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":40,"X":36,"Z":39},"when":600,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://102209137660745","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"CentipedeSwing","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"FlashStep","name":"DODGE","hitbox":{"Y":29,"X":27,"Z":29},"when":1030,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://102383192983641","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Ceroanim","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":30,"X":26,"Z":27},"when":550,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://13854505129","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"CloneStrike2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":213,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":30,"X":32,"Z":32},"when":570,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://122823331494331","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"CrocodileChomp1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":0,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":31,"X":29,"Z":33},"when":570,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://110620209403887","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"CrocodileChomp2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":0,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":29,"X":27,"Z":34},"when":1150,"ihbc":false},{"_type":"Parry","name":"parry2","hitbox":{"Y":25,"X":23,"Z":24},"when":1720,"ihbc":false},{"_type":"Parry","name":"parry3","hitbox":{"Y":24,"X":23,"Z":30},"when":2400,"ihbc":false},{"_type":"Parry","name":"Parry","hitbox":{"Y":37,"X":34,"Z":37},"when":1200,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://85733968676546","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"CrocodileChompBarrage","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":155,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":31,"X":29,"Z":36},"when":890,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://132052485145774","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"Cyclone","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"dodge","hitbox":{"Y":25,"X":23,"Z":25},"when":1000,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://101485195772910","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"DragonFlyBite","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"dodge","hitbox":{"Y":26,"X":18,"Z":32},"when":1410,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://83097070172817","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"DragonFlyGrab","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":30,"X":25,"Z":25},"when":1050,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://107574429239718","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"DragonFlySLAM","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"Parry1","hitbox":{"Y":65,"X":61,"Z":65},"when":1350,"ihbc":false},{"_type":"Parry","name":"pARRY2","hitbox":{"Y":65,"X":61,"Z":65},"when":1800,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://115495827589598","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"DragonFlySpin","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":33,"X":30,"Z":34},"when":800,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://82358037666428","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"DragonLash","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":27,"X":24,"Z":30},"when":500,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://78020267794128","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"FalseCutterSlash","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":213,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":30,"X":23,"Z":25},"when":800,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://16932406623","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"FlashSurprise2Drop","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":213,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":23,"X":29,"Z":31},"when":470,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://123458031797396","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"FrontKick","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":87,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":30,"X":31,"Z":37},"when":610,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://85652792138826","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"GSRunningATK","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":194,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":34,"X":33,"Z":27},"when":520,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://135906726244054","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"GSSSwing3","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":33,"X":32,"Z":34},"when":530,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://81281779521042","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"GSSswing1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":33,"X":29,"Z":22},"when":530,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://109175080835575","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"GSSwing2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":0,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":25,"X":32,"Z":26},"when":800,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11130826551","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"GreatSwordHeavy","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":155,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":33,"X":33,"Z":36},"when":650,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://95990465493386","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"GreyHunterRightSwing","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":24,"X":19,"Z":24},"when":650,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://71416929825712","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"GreyhunterLeftSwing","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":33,"X":30,"Z":31},"when":710,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://107439297045997","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"HakudaCrit","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":330,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":24,"X":27,"Z":27},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://80960587783764","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"HakudaHIT4","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":24,"X":27,"Z":26},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://105242552416030","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"HakudaHit1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":29,"X":23,"Z":29},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://105056646850750","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"HakudaHit2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":30,"X":33,"Z":32},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://104694319353269","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"HakudaHit3","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":27,"X":32,"Z":32},"when":610,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://96020812931018","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"HakudaRunningATK","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":25,"X":29,"Z":31},"when":440,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://115338865375824","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Hammer1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":34,"X":34,"Z":36},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://115880291306156","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Hammer2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17269260858","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"HeilingPfie1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parryK1","hitbox":{"Y":30,"X":30,"Z":30},"when":400,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://72352073483435","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KatanaSwing1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":116,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parryK2","hitbox":{"Y":27,"X":30,"Z":32},"when":400,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://91233168287060","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KatanaSwing2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":97,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":22,"X":26,"Z":24},"when":400,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://74973280679545","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KatanaSwing3","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":126,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"katanaswing4","hitbox":{"Y":31,"X":32,"Z":30},"when":400,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://76754008387126","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Katanaswing4","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"flashstep","hitbox":{"Y":34,"X":33,"Z":30},"when":50,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://93135336110774","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KingCrocGrabThrow","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":271,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":26,"X":29,"Z":32},"when":750,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://80651761610614","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KingCrocMace1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":271,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"DODGE","hitbox":{"Y":23,"X":31,"Z":23},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://100918285736290","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KingCrocStomp","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":271,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":29,"X":27,"Z":36},"when":750,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://101892073899926","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KingCrocSwing2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":26,"X":25,"Z":27},"when":750,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://91657425744872","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"KingMaceSwing2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"pARRY","hitbox":{"Y":25,"X":23,"Z":23},"when":880,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17732915133","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"LanceCrit","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"Dodge","hitbox":{"Y":24,"X":26,"Z":27},"when":650,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17150208141","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MantisGrab","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":37,"X":31,"Z":37},"when":330,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17150117745","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MantisLeftSwing","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":25,"X":29,"Z":41},"when":300,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17150140878","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MantisRightSwing","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":300,"X":65,"Z":69},"when":1130,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14110194908","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MenosLight1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":271,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":25,"X":24,"Z":24},"when":500,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://75995869780371","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MinigunLight2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":27,"X":27,"Z":27},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17154401086","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MuayThai4","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":29,"X":29,"Z":25},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17891409381","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MuayThaiHit1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":24,"X":23,"Z":24},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17154399253","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"MuayThaiHit3","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"DODGE","hitbox":{"Y":22,"X":24,"Z":24},"when":650,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://94860056861084","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"OneHandThrust","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":165,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":33,"X":26,"Z":39},"when":1200,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://126037393769736","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"OverheadStrike","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":155,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11361697224","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"Rapier3m1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":33,"X":32,"Z":37},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11361791134","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"RapierM4","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":23,"X":22,"Z":29},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11361552631","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"RapierSecondM1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"PARRY","hitbox":{"Y":29,"X":33,"Z":31},"when":570,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11151794033","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"Rapierheavy","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":36,"X":38,"Z":32},"when":490,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11361464104","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"Rapierm1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":22,"X":24,"Z":27},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://16417788544","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Rifle1M1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":26,"X":25,"Z":33},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://16417792446","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Rifle2M1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":33,"X":27,"Z":29},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://16417798771","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Rifle3M1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":23,"X":20,"Z":26},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://16417803802","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Rifle4M1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":37,"X":31,"Z":38},"when":560,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://91983451624365","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"RoundKick","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":30,"X":36,"Z":33},"when":440,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://119744649456014","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"RunningAttack","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"DODGE","hitbox":{"Y":33,"X":37,"Z":40},"when":500,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17188670401","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"ScorpionTriple","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":165,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":30,"X":24,"Z":32},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://83974667129266","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"ScytheSwing1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":22,"X":19,"Z":30},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://130863537121533","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"ScytheSwing2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[],"ndfb":false,"nbfb":false,"_id":"rbxassetid://91983784248298","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"ScytheSwing3","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":359,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":24,"X":23,"Z":24},"when":480,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://85599301703737","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"ScytheSwing4","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":359,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[],"ndfb":false,"nbfb":false,"_id":"rbxassetid://11123981295","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"SpearHeavy","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"Parry","hitbox":{"Y":27,"X":27,"Z":29},"when":465,"ihbc":false},{"_type":"Parry","name":"parry","hitbox":{"Y":31,"X":26,"Z":34},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://118925530415750","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"SpeqrHit1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":26,"X":32,"Z":32},"when":560,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17732755849","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"Swing2Lance","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":145,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":29,"X":29,"Z":36},"when":600,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17188386684","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"SwingLeftScorpion","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":165,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":26,"X":27,"Z":34},"when":600,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://17188382622","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"SwingRightScorpion","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":165,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"Dodge","hitbox":{"Y":26,"X":24,"Z":27},"when":620,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://128875759494501","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"ThrustRework","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":165,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"dodge","hitbox":{"Y":33,"X":31,"Z":36},"when":1000,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://126131534219589","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"ToadBodySlam","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":330,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"parry","hitbox":{"Y":32,"X":39,"Z":24},"when":400,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://86850231217100","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"ToadTongueSlap","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":330,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":32,"X":32,"Z":36},"when":550,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14327905929","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"TurtleLight1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":33,"X":31,"Z":31},"when":550,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14327924170","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"TurtleLight2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":30,"X":34,"Z":38},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14089180282","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"gorillaLight1","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":37,"X":37,"Z":32},"when":450,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14089184318","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"gorillalight2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":194,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Dodge","name":"DodgeCrit","hitbox":{"Y":25,"X":25,"Z":30},"when":550,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://91608694318547","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"lizardcrit","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":33,"X":34,"Z":37},"when":500,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14040293266","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"lizardlight","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"parry","hitbox":{"Y":30,"X":26,"Z":29},"when":500,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14040288114","pbfb":false,"rpue":false,"srpn":false,"punishable":0,"name":"lizardlight2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":174,"tag":"Undefined"},{"rpd":0,"hso":0,"ieae":false,"actions":[{"_type":"Parry","name":"PARRY","hitbox":{"Y":300,"X":33,"Z":34},"when":1140,"ihbc":false}],"ndfb":false,"nbfb":false,"_id":"rbxassetid://14110203809","pbfb":false,"rpue":false,"srpn":false,"punishable":0.6,"name":"menoslight2","hitbox":{"Y":0,"X":0,"Z":0},"fhb":true,"imdd":0,"duih":false,"rsd":0,"umoa":false,"smod":"N/A","bfht":0,"pfh":false,"after":0,"dp":false,"imb":false,"pfht":0.15,"aatk":false,"phds":0.5,"phd":false,"mat":2000,"nvfb":false,"smn":false,"iae":false,"ha":false,"imxd":1000,"tag":"Undefined"}]
-]]
-Raw.sound = [[
-[]
-]]
-Raw.part = [[
-[{"umoa":false,"rpd":0,"pname":"SpitShot","smod":"N/A","hso":0,"duih":false,"nvfb":false,"nbfb":false,"bfht":0,"actions":[{"_type":"Dodge","name":"parry","hitbox":{"Y":19,"X":20,"Z":24},"when":500,"ihbc":false}],"ndfb":false,"rsd":0,"after":0,"uhc":true,"pbfb":false,"rpue":false,"srpn":false,"aatk":false,"hitbox":{"Y":0,"X":0,"Z":0},"punishable":0.6,"name":"BatSpit","imxd":310,"smn":false,"fhb":true,"imdd":0,"tag":"Undefined"}]
-]]
-
--- Decode into arrays of timing tables (same shape as ReadTypeFolder).
-local Embedded = { animation = {}, sound = {}, part = {} }
-for TypeKey, Json in next, Raw do
-	local Ok, Data = pcall(function() return HttpService:JSONDecode(Json) end)
-	if Ok and type(Data) == "table" then
-		for _, Timing in next, Data do
-			Embedded[TypeKey][#Embedded[TypeKey] + 1] = Timing
-		end
-	end
-end
-
--- Return embedded timings module.
-return Embedded
-end)
 __bundle_register("Timings/PartTiming", function(require, _LOADED, __bundle_register, __bundle_modules)
 local Timing = require("Timings/Timing")
 
@@ -28381,7 +28375,6 @@ local TimingContainer = require("Timings/TimingContainer")
 local AnimationTiming = require("Timings/AnimationTiming")
 local PartTiming = require("Timings/PartTiming")
 local SoundTiming = require("Timings/SoundTiming")
-local EmbeddedTimings = require("Timings/EmbeddedTimings")
 local Maid = require("Utility/Maid")
 local Signal = require("Utility/Signal")
 local Configuration = require("Utility/Configuration")
@@ -28572,33 +28565,6 @@ local function EnsureTimingFolders(Path)
 		local TypePath = Path .. "/Timings/" .. TimingType.Folder
 		if not isfolder(TypePath) then makefolder(TypePath) end
 	end
-end
-
----Merge embedded default timings into disk data (disk takes precedence by name).
----@param DiskData table Array of timing tables read from disk.
----@param EmbeddedList table Array of embedded default timing tables.
----@return table
-local function MergeEmbedded(DiskData, EmbeddedList)
-	local Result = {}
-	local SeenNames = {}
-
-	-- Disk timings first (the user's own edits win).
-	for Index, Timing in next, DiskData do
-		if type(Timing) == "table" and Timing.name then
-			SeenNames[Timing.name] = true
-		end
-		Result[#Result + 1] = Timing
-	end
-
-	-- Embedded defaults fill in anything missing.
-	for Index, Timing in next, (EmbeddedList or {}) do
-		if type(Timing) == "table" and Timing.name and not SeenNames[Timing.name] then
-			SeenNames[Timing.name] = true
-			Result[#Result + 1] = Timing
-		end
-	end
-
-	return Result
 end
 
 ---Read all JSON timing files from a type folder.
@@ -28843,9 +28809,9 @@ end
 function SaveManager.Refresh()
 	local Timestamp = os.clock()
 
-	local AnimData = MergeEmbedded(ReadTypeFolder(FsAnimation), EmbeddedTimings.animation)
-	local SoundData = MergeEmbedded(ReadTypeFolder(FsSound), EmbeddedTimings.sound)
-	local PartData = MergeEmbedded(ReadTypeFolder(FsPart), EmbeddedTimings.part)
+	local AnimData = ReadTypeFolder(FsAnimation)
+	local SoundData = ReadTypeFolder(FsSound)
+	local PartData = ReadTypeFolder(FsPart)
 
 	Config:Clear()
 
@@ -28888,10 +28854,10 @@ function SaveManager.Init(GamePath)
 	local InternalSoundContainer = TimingContainer.new(SoundTiming)
 	InternalSoundContainer:Load({})
 
-	-- Load all timings from disk, merged with embedded defaults (disk wins).
-	local AnimData = MergeEmbedded(ReadTypeFolder(FsAnimation), EmbeddedTimings.animation)
-	local SoundData = MergeEmbedded(ReadTypeFolder(FsSound), EmbeddedTimings.sound)
-	local PartData = MergeEmbedded(ReadTypeFolder(FsPart), EmbeddedTimings.part)
+	-- Load all timings from disk.
+	local AnimData = ReadTypeFolder(FsAnimation)
+	local SoundData = ReadTypeFolder(FsSound)
+	local PartData = ReadTypeFolder(FsPart)
 
 	pcall(Config.Load, Config, {
 		animation = AnimData,
@@ -28901,7 +28867,7 @@ function SaveManager.Init(GamePath)
 
 	LastSaved = BuildSnapshot()
 
-	Logger.Warn("SaveManager loaded %d timing(s) (disk + embedded).", Config:Count())
+	Logger.Warn("SaveManager loaded %d timing(s) from disk.", Config:Count())
 
 	-- Animation stack.
 	SaveManager.As = TimingContainerPair.new(InternalAnimationContainer, Config:Get().animation)
@@ -29795,113 +29761,6 @@ end
 -- Return Configuration module.
 return Configuration
 end)
-__bundle_register("Utility/ControlModule", function(require, _LOADED, __bundle_register, __bundle_modules)
--- ControlModule — ported from type-soul-rewrite (1:1 with Aztup). Provides the
--- proper fly input move vector via ContextActionService binds (W/A/S/D with
--- ContextActionResult.Pass so normal movement keeps working). Adapted to
--- kenduap (PascalCase Logger/Maid, no Profiler dependency).
-
-local LPH_NO_VIRTUALIZE = LPH_NO_VIRTUALIZE or function(F)
-	return F
-end
-
-return LPH_NO_VIRTUALIZE(function()
-	-- This module is used for getting the proper input fly values - 1:1 with Aztup.
-	local ControlModule = {
-		forwardValue = 0,
-		backwardValue = 0,
-		leftValue = 0,
-		rightValue = 0,
-	}
-
-	---@module Utility.Logger
-	local Logger = require("Utility/Logger")
-
-	---@module Utility.Maid
-	local Maid = require("Utility/Maid")
-
-	-- Maids.
-	local controlMaid = Maid.new()
-
-	-- Services.
-	local ContextActionService = game:GetService("ContextActionService")
-
-	---Bind action safely with maid + error handling.
-	---@param actionName string
-	---@param callback function
-	---@param createTouchButton boolean
-	local function bindActionWrapper(actionName, callback, createTouchButton, ...)
-		---Log bind action errors.
-		---@param err string
-		local function onBindActionWrapperError(err)
-			Logger.Trace("onBindActionWrapperError - (%s) - %s", actionName, err)
-		end
-
-		local actionWrapperCallback = callback
-			and function(...)
-				local success, result = xpcall(callback, onBindActionWrapperError, ...)
-				if not success then
-					return nil
-				end
-				return result
-			end
-
-		controlMaid:Add(function()
-			ContextActionService:UnbindAction(actionName)
-		end)
-
-		ContextActionService:BindAction(actionName, actionWrapperCallback, createTouchButton, ...)
-	end
-
-	---Initialize control module.
-	function ControlModule.init()
-		bindActionWrapper("EP_ControlModule_ForwardValue", function(_, inputState, _)
-			ControlModule.forwardValue = (inputState == Enum.UserInputState.Begin) and -1 or 0
-			return Enum.ContextActionResult.Pass
-		end, false, Enum.KeyCode.W)
-
-		bindActionWrapper("EP_ControlModule_LeftValue", function(_, inputState, _)
-			ControlModule.leftValue = (inputState == Enum.UserInputState.Begin) and -1 or 0
-			return Enum.ContextActionResult.Pass
-		end, false, Enum.KeyCode.A)
-
-		bindActionWrapper("EP_ControlModule_BackwardValue", function(_, inputState, _)
-			ControlModule.backwardValue = (inputState == Enum.UserInputState.Begin) and 1 or 0
-			return Enum.ContextActionResult.Pass
-		end, false, Enum.KeyCode.S)
-
-		bindActionWrapper("EP_ControlModule_RightValue", function(_, inputState, _)
-			ControlModule.rightValue = (inputState == Enum.UserInputState.Begin) and 1 or 0
-			return Enum.ContextActionResult.Pass
-		end, false, Enum.KeyCode.D)
-
-		Logger.Warn("ControlModule initialized.")
-	end
-
-	---Detach control module.
-	function ControlModule.detach()
-		controlMaid:Clean()
-		ControlModule.forwardValue = 0
-		ControlModule.backwardValue = 0
-		ControlModule.leftValue = 0
-		ControlModule.rightValue = 0
-		Logger.Warn("ControlModule detached.")
-	end
-
-	---Get move vector.
-	---@return Vector3
-	function ControlModule.getMoveVector()
-		return Vector3.new(
-			ControlModule.leftValue + ControlModule.rightValue,
-			0,
-			ControlModule.forwardValue + ControlModule.backwardValue
-		)
-	end
-
-	-- Return control module.
-	return ControlModule
-end)()
-end)
 __bundle_register("Utility/Filesystem", function(require, _LOADED, __bundle_register, __bundle_modules)
 ---@class Filesystem
 ---@field _Path string
@@ -30004,106 +29863,26 @@ end
 return Filesystem
 end)
 __bundle_register("Utility/InstanceWrapper", function(require, _LOADED, __bundle_register, __bundle_modules)
--- InstanceWrapper — ported from type-soul-rewrite. Creates/caches an instance in
--- a maid, auto-uncaching it when it leaves the DataModel. BodyVelocity instances
--- are tagged "AllowedBM" (CollectionService) to match the game's body-mover
--- allow-list. Adapted to kenduap's Signal (:Connect) and Maid (:Add/:RemoveTask).
-
-local LPH_NO_VIRTUALIZE = LPH_NO_VIRTUALIZE or function(F)
-	return F
-end
-
--- Instance wrapper module.
+-- InstanceWrapper module. Creates or reuses Roblox Instances cached in a Maid.
 local InstanceWrapper = {}
 
--- Services.
-local collectionService = game:GetService("CollectionService")
-local tweenService = game:GetService("TweenService")
-
----@module Utility.Signal
-local Signal = require("Utility/Signal")
-
----Create & cache a tween, cleaned up through a maid, auto-uncached on deletion.
----@param instanceMaid Maid
----@param identifier any
----@return Tween
-InstanceWrapper.tween = LPH_NO_VIRTUALIZE(function(instanceMaid, identifier, ...)
-	local maidInstance = instanceMaid[identifier]
-	if maidInstance then
-		return maidInstance
-	end
-
-	local instance = tweenService:Create(...)
-	local onAncestorChange = Signal.new(instance.AncestryChanged)
-
-	instanceMaid[identifier] = instance
-	instanceMaid:Add(onAncestorChange:Connect("EpInstance_OnAncestorChange", function(_)
-		if instance:IsDescendantOf(game) then
-			return
-		end
-		instanceMaid:RemoveTask(identifier)
-	end))
-
-	return instance
-end)
-
----Cache an existing instance, cleaned up through a maid, auto-uncached on deletion.
----@param instanceMaid Maid
----@param identifier any
----@param inst Instance
----@return Instance
-InstanceWrapper.mark = LPH_NO_VIRTUALIZE(function(instanceMaid, identifier, inst)
-	local maidInstance = instanceMaid[identifier]
-	if maidInstance then
-		return maidInstance
-	end
-
-	local onAncestorChange = Signal.new(inst.AncestryChanged)
-
-	if inst:IsA("BodyVelocity") then
-		collectionService:AddTag(inst, "AllowedBM")
-	end
-
-	instanceMaid[identifier] = inst
-	instanceMaid:Add(onAncestorChange:Connect("EpInstance_OnAncestorChange", function(_)
-		if inst:IsDescendantOf(game) then
-			return
-		end
-		instanceMaid:RemoveTask(identifier)
-	end))
-
-	return inst
-end)
-
----Create & cache an instance, cleaned up through a maid, auto-uncached on deletion.
----@param instanceMaid Maid
----@param identifier any
+---Create (or reuse) an instance of className parented to parent, keyed in maid.
+---Skips recreation if the existing maid entry is already the right type and parent.
+---@param maid Maid
+---@param key any
 ---@param className string
----@param parent Instance?
+---@param parent Instance
 ---@return Instance
-InstanceWrapper.create = LPH_NO_VIRTUALIZE(function(instanceMaid, identifier, className, parent)
-	local maidInstance = instanceMaid[identifier]
-	if maidInstance then
-		return maidInstance
+function InstanceWrapper.create(maid, key, className, parent)
+	local existing = maid[key]
+	if existing and typeof(existing) == "Instance" and existing:IsA(className) and existing.Parent == parent then
+		return existing
 	end
-
-	local newInstance = Instance.new(className, parent)
-	local onAncestorChange = Signal.new(newInstance.AncestryChanged)
-
-	if newInstance:IsA("BodyVelocity") then
-		collectionService:AddTag(newInstance, "AllowedBM")
-	end
-
-	instanceMaid[identifier] = newInstance
-	instanceMaid:Add(onAncestorChange:Connect("EpInstance_OnAncestorChange", function(_)
-		if newInstance:IsDescendantOf(game) then
-			return
-		end
-		instanceMaid:RemoveTask(identifier)
-	end))
-
-	return newInstance
-end)
+	local inst = Instance.new(className)
+	inst.Parent = parent
+	maid[key] = inst
+	return inst
+end
 
 -- Return InstanceWrapper module.
 return InstanceWrapper
@@ -30446,77 +30225,54 @@ end
 return OriginalStore
 end)
 __bundle_register("Utility/OriginalStoreManager", function(require, _LOADED, __bundle_register, __bundle_modules)
--- OriginalStoreManager — ported from type-soul-rewrite. Manages a map of
--- OriginalStore objects (one per instance) so many properties can be swapped and
--- restored at once. Adapted to kenduap's PascalCase OriginalStore API.
-
+-- OriginalStoreManager module. Tracks many instance-property pairs with OriginalStore.
 ---@module Utility.OriginalStore
 local OriginalStore = require("Utility/OriginalStore")
 
 ---@class OriginalStoreManager
----@field inner OriginalStore[]
 local OriginalStoreManager = {}
 OriginalStoreManager.__index = OriginalStoreManager
 
----Forget data value.
----@param data table|Instance
-function OriginalStoreManager:forget(data)
-	self.inner[data] = nil
-end
-
----Mark data value.
----@param data table|Instance
----@param index any
-function OriginalStoreManager:mark(data, index)
-	local object = self.inner[data] or OriginalStore.new()
-	object:Mark(data, index)
-	self.inner[data] = object
-end
-
----Add (set) a data value, remembering the original.
----@param data table|Instance
----@param index any
+---Set a property and remember its original value.
+---@param instance Instance
+---@param property string
 ---@param value any
-function OriginalStoreManager:add(data, index, value)
-	local object = self.inner[data] or OriginalStore.new()
-	object:Set(data, index, value)
-	self.inner[data] = object
+function OriginalStoreManager:add(instance, property, value)
+	local entry = self._stores[instance]
+	if not entry then
+		entry = {}
+		self._stores[instance] = entry
+	end
+	if not entry[property] then
+		entry[property] = OriginalStore.new()
+	end
+	entry[property]:Set(instance, property, value)
 end
 
----Get all stores.
----@return OriginalStore[]
-function OriginalStoreManager:data()
-	return self.inner
-end
-
----Get a store by data.
----@param data table|Instance
----@return OriginalStore
-function OriginalStoreManager:get(data)
-	return self.inner[data]
-end
-
----Restore all stored values.
+---Restore all tracked properties and clear.
 function OriginalStoreManager:restore()
-	for _, store in next, self.inner do
-		store:Restore()
+	for _, props in next, self._stores do
+		for _, store in next, props do
+			store:Restore()
+		end
 	end
+	self._stores = {}
 end
 
----Detach (restore + clear). PascalCase so kenduap's Maid can clean it too.
+---Restore all tracked properties, clear, and release.
 function OriginalStoreManager:Detach()
-	for _, store in next, self.inner do
-		store:Detach()
+	for _, props in next, self._stores do
+		for _, store in next, props do
+			store:Detach()
+		end
 	end
-	self.inner = {}
+	self._stores = {}
 end
 
----Create new OriginalStoreManager object.
+---Create a new OriginalStoreManager.
 ---@return OriginalStoreManager
 function OriginalStoreManager.new()
-	local self = setmetatable({}, OriginalStoreManager)
-	self.inner = {}
-	return self
+	return setmetatable({ _stores = {} }, OriginalStoreManager)
 end
 
 -- Return OriginalStoreManager module.
@@ -74013,6 +73769,626 @@ end
 -- Return TaskSpawner module.
 return TaskSpawner
 end)
+__bundle_register("Visuals/DistanceHUD", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Distance HUD stub.
+local DistanceHUD = {}
+function DistanceHUD.Init() end
+function DistanceHUD.Detach() end
+return DistanceHUD
+end)
+__bundle_register("Visuals/EntityESP", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Base class for world-space ESP with a layout engine.
+-- Port of the EntityESP reference; adapted to PascalCase Configuration/Maid.
+-- Strips Deepwoken-specific health-change splash; keeps the layout system.
+
+---@module Utility.Configuration
+local Configuration = require("Utility/Configuration")
+
+---@module Utility.Maid
+local Maid = require("Utility/Maid")
+
+---@class EntityESP
+local EntityESP = {}
+EntityESP.__index = EntityESP
+EntityESP.__type = "EntityESP"
+
+local playersService = game:GetService("Players")
+
+local ELEMENT_PADDING      = 1
+local BILLBOARD_MIN_WIDTH  = 10
+local BILLBOARD_MIN_HEIGHT = 10
+
+-- Colorpicker flags are stored as {Color=Color3, Alpha=n, ...}, not raw Color3.
+local function ReadColor(flag, default)
+	if type(flag) == "table" and flag.Color then
+		return flag.Color
+	elseif typeof(flag) == "Color3" then
+		return flag
+	end
+	return default
+end
+
+---Inside-outline stroke on a Frame.
+EntityESP.gio = LPH_NO_VIRTUALIZE(function(frame, strokeColor, insideOffset)
+	local sizeOffset = -insideOffset * 2
+	local sc = Instance.new("Frame")
+	sc.Name = "Outline_" .. tostring(insideOffset)
+	sc.Parent = frame
+	sc.Size = UDim2.new(1, sizeOffset, 1, sizeOffset)
+	sc.Position = UDim2.new(0, insideOffset, 0, insideOffset)
+	sc.BackgroundTransparency = 1
+	local stroke = Instance.new("UIStroke")
+	stroke.Color = strokeColor
+	stroke.Thickness = 1
+	stroke.BorderStrokePosition = Enum.BorderStrokePosition.Inner
+	stroke.Parent = sc
+	return sc
+end)
+
+---Update the TextLabel inside a container.
+EntityESP.utext = LPH_NO_VIRTUALIZE(function(self, container, text)
+	local label = container:FindFirstChildOfClass("TextLabel")
+	if not label then return end
+	label.Text      = text
+	label.TextSize  = Configuration.ExpectOptionValue("EP_ESP_FontSize") or 13
+	label.Font      = Enum.Font[Configuration.ExpectOptionValue("EP_ESP_Font") or "Code"] or Enum.Font.Code
+	label.TextColor3 = ReadColor(Configuration.IdOptionValue(self.identifier, "Color"), Color3.new(1, 1, 1))
+end)
+
+---Get the Bar frame inside a container.
+EntityESP.gb = LPH_NO_VIRTUALIZE(function(container)
+	local bg = container:FindFirstChild("Background")
+	if not bg then return nil end
+	local ba = bg:FindFirstChild("BarArea")
+	if not ba then return nil end
+	return ba:FindFirstChild("Bar")
+end)
+
+---Resize the bar fill inside a container.
+---@param vertical boolean  true = grow upward, false = grow rightward
+---@param percentage number  0–1
+EntityESP.mbs = LPH_NO_VIRTUALIZE(function(container, vertical, percentage)
+	local bg = container:FindFirstChild("Background")
+	if not bg then return end
+	local ba = bg:FindFirstChild("BarArea")
+	if not ba then return end
+	local bar = ba:FindFirstChild("Bar")
+	if not bar then return end
+	percentage = math.clamp(percentage, 0.0, 1.0)
+	if vertical then
+		bar.Size = UDim2.new(1, 0, percentage, 0)
+	else
+		bar.Size = UDim2.new(percentage, 0, 1, 0)
+	end
+end)
+
+---Create a generic bar inside a container.
+---@param seperators boolean  draw 4 horizontal separator ticks (useful for HP)
+---@param vertical boolean
+---@param color Color3
+EntityESP.cgb = LPH_NO_VIRTUALIZE(function(self, container, seperators, vertical, color)
+	local bg = Instance.new("Frame")
+	bg.Name = "Background"
+	bg.Parent = container
+	if vertical then
+		bg.Size        = UDim2.new(1, -1, -1, 0)
+		bg.Position    = UDim2.new(1, -1, 1, 0)
+		bg.AnchorPoint = Vector2.new(1.0, 0.0)
+	else
+		bg.Size        = UDim2.new(1, 0, 1, 0)
+		bg.Position    = UDim2.new(0, 0, 0, 0)
+		bg.AnchorPoint = Vector2.new(0, 0)
+	end
+	bg.BackgroundColor3 = Color3.new(0.086, 0.106, 0.220)
+	bg.BorderSizePixel  = 0
+	self.gio(bg, Color3.new(0, 0, 0), 0)
+
+	local barArea = Instance.new("Frame")
+	barArea.Name                 = "BarArea"
+	barArea.Parent               = bg
+	barArea.BackgroundTransparency = 1
+	barArea.Position             = UDim2.new(0, 1, 0, 1)
+	barArea.Size                 = UDim2.new(1, -2, 1, -2)
+	barArea.ZIndex               = 1
+
+	if seperators then
+		for i = 1, 4 do
+			local sep = Instance.new("Frame")
+			sep.Name             = "Separator"
+			sep.Parent           = barArea
+			sep.BackgroundColor3 = Color3.new(0, 0, 0)
+			sep.BorderSizePixel  = 0
+			sep.Position         = UDim2.new(0, 0, i / 5, 0)
+			sep.Size             = UDim2.new(1, 0, 0, 1)
+			sep.ZIndex           = 3
+		end
+	end
+
+	local bar = Instance.new("Frame")
+	bar.Name            = "Bar"
+	bar.Parent          = barArea
+	bar.BorderSizePixel = 0
+	bar.ZIndex          = 2
+	if vertical then
+		bar.AnchorPoint = Vector2.new(0, 1)
+		bar.Position    = UDim2.new(0, 0, 1, 0)
+		bar.Size        = UDim2.new(1, 0, 0.0, 0)
+	else
+		bar.Position    = UDim2.new(0, 0, 0, 0)
+		bar.Size        = UDim2.new(0.0, 0, 1, 0)
+	end
+	bar.BackgroundColor3 = color
+end)
+
+---Toggle billboard visibility.
+EntityESP.visible = LPH_NO_VIRTUALIZE(function(self, visible)
+	self.billboard.Enabled = visible
+end)
+
+---Clean up all resources.
+EntityESP.detach = LPH_NO_VIRTUALIZE(function(self)
+	self.maid:Clean()
+end)
+
+---Hide separators beyond 300 studs.
+EntityESP.useperators = LPH_NO_VIRTUALIZE(function(self, distance)
+	local bar = self.gb(self.hbar)
+	if not bar then return end
+	for _, sep in next, bar.Parent:GetChildren() do
+		if sep:IsA("Frame") and sep.Name == "Separator" then
+			sep.Visible = distance <= 300
+		end
+	end
+end)
+
+---Concatenate tags into the label string, splitting long lines.
+EntityESP.btext = LPH_NO_VIRTUALIZE(function(self, label, tags)
+	if #tags <= 0 then return label end
+	local splitLen = Configuration.ExpectOptionValue("EP_ESP_SplitLineLength") or 60
+	local lines = {}
+	local start = true
+	for _, tag in next, tags do
+		local line = lines[#lines] or label
+		if not start and #line > splitLen then
+			lines[#lines + 1] = tag
+			continue
+		end
+		line = line .. " " .. tag
+		lines[start and 1 or #lines] = line
+		start = false
+	end
+	return table.concat(lines, "\n"), #lines
+end)
+
+---Render one frame. Called by subclass after setting self.label and building tags.
+EntityESP.update = LPH_NO_VIRTUALIZE(function(self, tags)
+	local identifier = self.identifier
+
+	if not Configuration.IdToggleValue(identifier, "Enable") then
+		return self:visible(false)
+	end
+
+	local localPlayer    = playersService.LocalPlayer
+	local localCharacter = localPlayer and localPlayer.Character
+	local localRoot      = localCharacter and localCharacter:FindFirstChild("HumanoidRootPart")
+	if not localRoot then return self:visible(false) end
+
+	local entityHumanoid = self.entity and self.entity:FindFirstChildOfClass("Humanoid")
+	local entityRoot     = self.entity and self.entity:FindFirstChild("HumanoidRootPart")
+	local position       = entityRoot and entityRoot.Position
+	if not entityHumanoid or not position then return self:visible(false) end
+
+	local distance = (localRoot.Position - position).Magnitude
+
+	local maxDist = Configuration.IdOptionValue(identifier, "MaxDistance")
+	if maxDist and maxDist > 0 and distance > maxDist then
+		return self:visible(false)
+	end
+
+	-- Pin the adornee to the root part.
+	self.billboard.Adornee = entityRoot
+
+	-- Element visibility.
+	self.bbstroke.Visible = Configuration.IdToggleValue(identifier, "BoundingBox") == true
+	self.wbstroke.Visible = Configuration.IdToggleValue(identifier, "BoundingBox") == true
+	self.dcontainer.Visible = Configuration.IdToggleValue(identifier, "ShowDistance") == true
+	self.hbar.Visible       = Configuration.IdToggleValue(identifier, "HealthBar") ~= false
+
+	-- Update text.
+	local fontSize = Configuration.ExpectOptionValue("EP_ESP_FontSize") or 13
+	local text, lines = self:btext(self.label, tags)
+	self:utext(self.ncontainer, text)
+
+	local nameEl = self:find("Name")
+	if nameEl then nameEl.space = (lines * fontSize) + (ELEMENT_PADDING * 2) end
+
+	local distEl = self:find("Distance")
+	if distEl then distEl.space = fontSize + (ELEMENT_PADDING * 2) end
+
+	self:utext(self.dcontainer, string.format("%im", math.floor(distance)))
+
+	-- Health bar.
+	local bar = self.gb(self.hbar)
+	if self.hbar and bar then
+		local pct        = entityHumanoid.Health / entityHumanoid.MaxHealth
+		local fullColor  = ReadColor(Configuration.IdOptionValue(identifier, "FullColor"),  Color3.fromRGB(0, 220, 70))
+		local emptyColor = ReadColor(Configuration.IdOptionValue(identifier, "EmptyColor"), Color3.fromRGB(220, 0, 0))
+		self.mbs(self.hbar, true, pct)
+		bar.BackgroundColor3 = emptyColor:Lerp(fullColor, math.clamp(pct, 0.0, 1.0))
+		self:useperators(distance)
+	end
+
+	-- Rebuild layout.
+	self:build()
+
+	self:visible(true)
+end)
+
+---Rebuild the billboard size and element positions.
+EntityESP.build = LPH_NO_VIRTUALIZE(function(self)
+	local sideOffsets = { top = 0, bottom = 0, left = 0, right = 0 }
+
+	for side, elementList in next, self.elements do
+		local n = 0
+		for _, item in next, elementList do
+			if not item.container.Visible then continue end
+			sideOffsets[side] = sideOffsets[side] + item.space + ELEMENT_PADDING
+			n = n + 1
+		end
+		if n > 0 then sideOffsets[side] = sideOffsets[side] - ELEMENT_PADDING end
+	end
+
+	local maxH = math.max(sideOffsets.left, sideOffsets.right)
+	local maxV = math.max(sideOffsets.top,  sideOffsets.bottom)
+
+	local extentsSize = self.entity:GetExtentsSize()
+
+	-- Cache to avoid recomputing every frame; invalidate on large model size changes.
+	if self.lextents and math.abs(self.lextents.Magnitude - extentsSize.Magnitude) >= 10.0 then
+		self.sextents = nil
+	end
+	self.lextents = extentsSize
+
+	if not self.sextents then
+		-- Clone() returns nil on non-Archivable models (standard for Roblox characters).
+		-- Direct GetExtentsSize() is accurate enough for billboard sizing.
+		self.sextents = extentsSize
+	end
+
+	self.billboard.Size = UDim2.new(
+		self.sextents.X + 1.5, maxH * 2 + BILLBOARD_MIN_WIDTH,
+		self.sextents.Y + 1.5, maxV * 2 + BILLBOARD_MIN_HEIGHT
+	)
+
+	self.bbox.Position = UDim2.new(0, maxH, 0, maxV)
+	self.bbox.Size     = UDim2.new(1, -(maxH * 2), 1, -(maxV * 2))
+
+	-- Top elements (stack upward from box).
+	local topOff = 0
+	for _, el in next, self.elements.top do
+		if not el.container.Visible then continue end
+		el.container.Parent      = self.canvas
+		el.container.AnchorPoint = Vector2.new(0, 1)
+		el.container.Position    = UDim2.new(0, maxH, 0, maxV - topOff)
+		el.container.Size        = UDim2.new(1, -(maxH * 2), 0, el.space)
+		topOff = topOff + el.space + ELEMENT_PADDING
+		if not el.created and el.create then el.create(el.container); el.created = true end
+	end
+
+	-- Bottom elements (stack downward from box).
+	local botOff = 0
+	for _, el in next, self.elements.bottom do
+		if not el.container.Visible then continue end
+		el.container.Parent      = self.bbox
+		el.container.AnchorPoint = Vector2.new(0, 0)
+		el.container.Position    = UDim2.new(0, 0, 1, botOff)
+		el.container.Size        = UDim2.new(1, 0, 0, el.space)
+		botOff = botOff + el.space + ELEMENT_PADDING
+		if not el.created and el.create then el.create(el.container); el.created = true end
+	end
+
+	-- Left elements (stack left from box).
+	local leftOff = 0
+	for _, el in next, self.elements.left do
+		if not el.container.Visible then continue end
+		el.container.Parent      = self.canvas
+		el.container.AnchorPoint = Vector2.new(1, 0)
+		el.container.Position    = UDim2.new(0, maxH - leftOff, 0, maxV)
+		el.container.Size        = UDim2.new(0, el.space, 1, -(maxV * 2))
+		leftOff = leftOff + el.space + ELEMENT_PADDING
+		if not el.created and el.create then el.create(el.container); el.created = true end
+	end
+
+	-- Right elements (stack right from box).
+	local rightOff = 0
+	for _, el in next, self.elements.right do
+		if not el.container.Visible then continue end
+		el.container.Parent      = self.bbox
+		el.container.AnchorPoint = Vector2.new(0, 0)
+		el.container.Position    = UDim2.new(1, rightOff, 0, 0)
+		el.container.Size        = UDim2.new(0, el.space, 1, 0)
+		rightOff = rightOff + el.space + ELEMENT_PADDING
+		if not el.created and el.create then el.create(el.container); el.created = true end
+	end
+end)
+
+---Find an element by name across all sides.
+EntityESP.find = LPH_NO_VIRTUALIZE(function(self, name)
+	for _, list in next, self.elements do
+		for _, el in next, list do
+			if el.name == name then return el end
+		end
+	end
+	return nil
+end)
+
+---Add a new element slot on a given side.
+---@param name string
+---@param side string  "top"|"bottom"|"left"|"right"
+---@param space number  pixel thickness/height of the slot
+---@param create function  called once to populate the container Frame
+---@return Frame  the container Frame
+EntityESP.add = LPH_NO_VIRTUALIZE(function(self, name, side, space, create)
+	local container = Instance.new("Frame")
+	container.Name               = string.format("%s_Container_%s", side, name)
+	container.BackgroundTransparency = 1
+	table.insert(self.elements[side], {
+		name     = name,
+		container = container,
+		space    = space,
+		create   = create,
+		created  = false,
+	})
+	return container
+end)
+
+---Override to add extra elements after hbar is created.
+EntityESP.extra = LPH_NO_VIRTUALIZE(function(_) end)
+
+---Build the BillboardGui hierarchy and default elements.
+EntityESP.setup = LPH_NO_VIRTUALIZE(function(self)
+	local root = self.entity:FindFirstChild("HumanoidRootPart")
+
+	local billboard = Instance.new("BillboardGui")
+	billboard.AlwaysOnTop      = true
+	billboard.Enabled          = false
+	billboard.Adornee          = root or self.entity
+	billboard.Parent           = workspace
+	billboard.ClipsDescendants = false
+	billboard.AutoLocalize     = false
+
+	local canvas = Instance.new("Frame")
+	canvas.Name                 = "Canvas"
+	canvas.BackgroundTransparency = 1
+	canvas.Size                 = UDim2.new(1, 0, 1, 0)
+	canvas.Position             = UDim2.new(0, 0, 0, 0)
+	canvas.Parent               = billboard
+
+	local bbox = Instance.new("Frame")
+	bbox.Name                 = "ESPBoundingBox"
+	bbox.Parent               = canvas
+	bbox.BackgroundTransparency = 1
+	bbox.Size                 = UDim2.new(1, 0, 1, 0)
+	bbox.Position             = UDim2.new(0, 0, 0, 0)
+
+	-- Two-layer box outline (outer black, inner white).
+	self.bbstroke = self.gio(bbox, Color3.new(0, 0, 0), 0)
+	self.wbstroke = self.gio(bbox, Color3.new(1, 1, 1), 1)
+
+	self.billboard = self.maid:Mark(billboard)
+	self.canvas    = self.maid:Mark(canvas)
+	self.bbox      = self.maid:Mark(bbox)
+
+	-- Health bar on the left (vertical, with separators).
+	self.hbar = self:add("HealthBar", "left", 6, function(container)
+		self:cgb(container, true, true, Color3.new(1.0, 1.0, 1.0))
+	end)
+
+	-- Let subclasses add their own elements between hbar and the default text slots.
+	self:extra()
+
+	-- Distance label (bottom).
+	self.dcontainer = self:add("Distance", "bottom", 16, function(container)
+		local lbl = Instance.new("TextLabel")
+		lbl.Parent               = container
+		lbl.Text                 = "0m"
+		lbl.Size                 = UDim2.new(0, 400, 1, 0)
+		lbl.AnchorPoint          = Vector2.new(0.5, 0)
+		lbl.Position             = UDim2.new(0.5, 0, 0, 0)
+		lbl.BackgroundTransparency = 1.0
+		lbl.TextStrokeColor3     = Color3.new(0, 0, 0)
+		lbl.TextStrokeTransparency = 0.0
+		lbl.TextColor3           = Color3.new(1, 1, 1)
+		lbl.TextSize             = 13
+		lbl.TextWrapped          = false
+		lbl.Font                 = Enum.Font.Code
+	end)
+
+	-- Name/tags label (top).
+	self.ncontainer = self:add("Name", "top", 16, function(container)
+		local lbl = Instance.new("TextLabel")
+		lbl.Parent               = container
+		lbl.Text                 = "N/A"
+		lbl.Size                 = UDim2.new(0, 400, 1, 0)
+		lbl.AnchorPoint          = Vector2.new(0.5, 0)
+		lbl.Position             = UDim2.new(0.5, 0, 0, 0)
+		lbl.BackgroundTransparency = 1.0
+		lbl.TextStrokeColor3     = Color3.new(0, 0, 0)
+		lbl.TextStrokeTransparency = 0.0
+		lbl.TextColor3           = Color3.new(1, 1, 1)
+		lbl.TextSize             = 13
+		lbl.TextWrapped          = false
+		lbl.Font                 = Enum.Font.Code
+	end)
+end)
+
+---Create a new EntityESP. Call :setup() and :build() after construction.
+---@param entity Model
+---@param identifier string
+---@param label string
+function EntityESP.new(entity, identifier, label)
+	local self       = setmetatable({}, EntityESP)
+	self.label      = label
+	self.entity     = entity
+	self.identifier = identifier
+	self.maid       = Maid.new()
+	self.elements   = { top = {}, bottom = {}, left = {}, right = {} }
+	return self
+end
+
+-- Return EntityESP module.
+return EntityESP
+end)
+__bundle_register("Visuals/InstanceESP", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Base class for BillboardGui ESP over any Instance.
+-- Port of the InstanceESP reference; uses PascalCase Configuration/Maid.
+
+---@module Utility.Configuration
+local Configuration = require("Utility/Configuration")
+
+---@module Utility.Maid
+local Maid = require("Utility/Maid")
+
+---@class InstanceESP
+---@field identifier string
+---@field maid Maid
+---@field label string
+---@field text TextLabel
+---@field billboard BillboardGui
+---@field instance Instance
+local InstanceESP = {}
+InstanceESP.__index = InstanceESP
+InstanceESP.__type = "InstanceESP"
+
+local playersService = game:GetService("Players")
+
+local ESP_DISTANCE_FORMAT = "%s [%i]"
+
+---Set billboard visibility.
+---@param visible boolean
+function InstanceESP:visible(visible)
+	self.billboard.Enabled = visible
+end
+
+---Clean up.
+function InstanceESP:detach()
+	self.maid:Clean()
+end
+
+---Concatenate tags into label text, splitting long lines.
+---@param label string
+---@param tags string[]
+---@return string
+function InstanceESP:build(label, tags)
+	if #tags <= 0 then
+		return label
+	end
+
+	local splitLength = Configuration.ExpectOptionValue("EP_ESP_SplitLineLength") or 60
+	local lines = {}
+	local start = true
+
+	for _, tag in next, tags do
+		local line = lines[#lines] or label
+
+		if not start and #line > splitLength then
+			lines[#lines + 1] = tag
+			continue
+		end
+
+		line = line .. " " .. tag
+		lines[start and 1 or #lines] = line
+		start = false
+	end
+
+	return table.concat(lines, "\n")
+end
+
+---Render one frame: distance check, label text, color, font.
+---@param position Vector3  world position of the target
+---@param tags string[]
+function InstanceESP:update(position, tags)
+	local label      = self.label
+	local identifier = self.identifier
+
+	if not Configuration.IdToggleValue(identifier, "Enable") then
+		return self:visible(false)
+	end
+
+	local localPlayer    = playersService.LocalPlayer
+	local localCharacter = localPlayer and localPlayer.Character
+	if not localCharacter then return self:visible(false) end
+
+	local localRoot = localCharacter:FindFirstChild("HumanoidRootPart")
+	if not localRoot then return self:visible(false) end
+
+	local distance = (localRoot.Position - position).Magnitude
+
+	local maxDist = Configuration.IdOptionValue(identifier, "MaxDistance")
+	if maxDist and maxDist > 0 and distance > maxDist then
+		return self:visible(false)
+	end
+
+	if Configuration.IdToggleValue(identifier, "ShowDistance") then
+		label = ESP_DISTANCE_FORMAT:format(label, distance)
+	end
+
+	self:visible(true)
+
+	local text = self.text
+	text.Text               = self:build(label, tags)
+	text.TextColor3         = Configuration.IdOptionValue(identifier, "Color") or Color3.new(1, 1, 1)
+	text.TextSize           = Configuration.ExpectOptionValue("EP_ESP_FontSize") or 16
+	local fontName          = Configuration.ExpectOptionValue("EP_ESP_Font")
+	text.Font               = (fontName and Enum.Font[fontName]) or Enum.Font.Code
+end
+
+---Build the BillboardGui and TextLabel.
+function InstanceESP:setup()
+	local billboard = Instance.new("BillboardGui")
+	billboard.AlwaysOnTop  = true
+	-- 1e5 scale means the container fills the screen; text renders centered on the adornee.
+	billboard.Size         = UDim2.new(1e5, 0, 1e5, 0)
+	billboard.Enabled      = false
+	billboard.Adornee      = self.instance
+	billboard.Parent       = workspace
+	billboard.AutoLocalize = false
+
+	local label = Instance.new("TextLabel")
+	label.BackgroundTransparency = 1.0
+	label.Size                   = UDim2.new(1, 0, 1, 0)
+	label.TextStrokeTransparency = 0.0
+	label.AutoLocalize           = false
+	label.Parent                 = billboard
+
+	self.billboard = self.maid:Mark(billboard)
+	self.text      = self.maid:Mark(label)
+end
+
+---Create a new InstanceESP.
+---@param instance Instance  the adornee
+---@param identifier string  flag-name prefix
+---@param label string       default display label
+function InstanceESP.new(instance, identifier, label)
+	local self      = setmetatable({}, InstanceESP)
+	self.label      = label
+	self.instance   = instance
+	self.identifier = identifier
+	self.maid       = Maid.new()
+	self:setup()
+	return self
+end
+
+-- Return InstanceESP module.
+return InstanceESP
+end)
+__bundle_register("Visuals/MobESP", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Mob ESP stub.
+local MobESP = {}
+function MobESP.Init() end
+function MobESP.Detach() end
+return MobESP
+end)
 __bundle_register("Visuals/Movement", function(require, _LOADED, __bundle_register, __bundle_modules)
 -- Movement engine.
 --   * Speedhack -> rootPart.AssemblyLinearVelocity += MoveDirection.Unit * speed
@@ -74095,7 +74471,6 @@ local function updateFlyHack(rootPart, humanoid)
 		return
 	end
 
-	-- Body movers (cached in the maid, tagged AllowedBM for the BodyVelocity).
 	local bodyGyro = InstanceWrapper.create(movementMaid, "flyBodyGyro", "BodyGyro", rootPart)
 	bodyGyro.P = 9e4
 	bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
@@ -74107,24 +74482,13 @@ local function updateFlyHack(rootPart, humanoid)
 		humanoid.PlatformStand = true
 	end
 
-	-- iy CONTROL values from current key state (F/B/L/R, plus Q up / E down).
 	local F, B, L, R, Q, E = 0, 0, 0, 0, 0, 0
 	if not UserInputService:GetFocusedTextBox() then
-		if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-			F = 1
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-			B = -1
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-			L = -1
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-			R = 1
-		end
-		if UserInputService:IsKeyDown(Enum.KeyCode.E) or UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-			Q = 2
-		end
+		if UserInputService:IsKeyDown(Enum.KeyCode.W) then F = 1 end
+		if UserInputService:IsKeyDown(Enum.KeyCode.S) then B = -1 end
+		if UserInputService:IsKeyDown(Enum.KeyCode.A) then L = -1 end
+		if UserInputService:IsKeyDown(Enum.KeyCode.D) then R = 1 end
+		if UserInputService:IsKeyDown(Enum.KeyCode.E) or UserInputService:IsKeyDown(Enum.KeyCode.Space) then Q = 2 end
 		if
 			UserInputService:IsKeyDown(Enum.KeyCode.Q)
 			or UserInputService:IsKeyDown(Enum.KeyCode.LeftShift)
@@ -74135,7 +74499,6 @@ local function updateFlyHack(rootPart, humanoid)
 	end
 
 	local speed = Configuration.ExpectOptionValue("EP_Move_Fly_Speed") or 50
-	-- Guard against NaN/inf (e.g. a bad flag value) so we never fling at light speed.
 	if type(speed) ~= "number" or speed ~= speed or speed == math.huge or speed == -math.huge then
 		speed = 50
 	end
@@ -74154,8 +74517,7 @@ end
 
 ---Update noclip.
 ---@param character Model
----@param rootPart BasePart
-local function updateNoClip(character, rootPart)
+local function updateNoClip(character)
 	for _, instance in pairs(character:GetChildren()) do
 		if instance:IsA("BasePart") then
 			noClipMap:add(instance, "CanCollide", false)
@@ -74167,19 +74529,13 @@ end
 local function updateMovement()
 	local localPlayer = Players.LocalPlayer
 	local character = localPlayer and localPlayer.Character
-	if not character then
-		return
-	end
+	if not character then return end
 
 	local rootPart = character:FindFirstChild("HumanoidRootPart")
-	if not rootPart then
-		return
-	end
+	if not rootPart then return end
 
 	local humanoid = character:FindFirstChild("Humanoid")
-	if not humanoid then
-		return
-	end
+	if not humanoid then return end
 
 	if Configuration.ExpectToggleValue("EP_Move_Fly_Enable") then
 		updateFlyHack(rootPart, humanoid)
@@ -74188,7 +74544,7 @@ local function updateMovement()
 	end
 
 	if Configuration.ExpectToggleValue("EP_Move_Noclip_Enable") then
-		updateNoClip(character, rootPart)
+		updateNoClip(character)
 	else
 		noClipMap:restore()
 	end
@@ -74205,7 +74561,6 @@ function Movement.Init()
 	MySession = getgenv().__EP_MovementSession
 
 	movementMaid:Add(RunService.PreSimulation:Connect(function()
-		-- Self-cancel if a newer instance took over.
 		if getgenv().__EP_MovementSession ~= MySession then
 			Movement.Detach()
 			return
@@ -74218,7 +74573,6 @@ end
 
 ---Detach movement and restore everything.
 function Movement.Detach()
-	-- Release PlatformStand on the current character before dropping movers.
 	local localPlayer = Players.LocalPlayer
 	local character = localPlayer and localPlayer.Character
 	local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -74234,384 +74588,270 @@ end
 -- Return Movement module.
 return Movement
 end)
+__bundle_register("Visuals/NpcESP", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- NPC ESP stub.
+local NpcESP = {}
+function NpcESP.Init() end
+function NpcESP.Detach() end
+return NpcESP
+end)
 __bundle_register("Visuals/PlayerESP", function(require, _LOADED, __bundle_register, __bundle_modules)
--- Player ESP engine — Infinite Yield method:
---   * BoxHandleAdornment on every BasePart (the bright "chams" boxes), colored by
---     team (green ally / red enemy) or a custom color.
---   * BillboardGui + TextLabel on the Head showing Name | Health | Studs.
--- Every element is individually toggleable. Session-guarded (__EP_ESPSession).
+-- Player ESP — extends EntityESP.
+-- Health bar on LEFT (vertical), Posture bar on RIGHT (vertical).
+-- Billboard scales to character model extents; no "gigantesque at distance" issue.
+-- Posture path: workspace.Living[Character.Name].Status.Posture / MaxPosture.
 
----@module Utility.Maid
-local Maid = require("Utility/Maid")
+---@module Visuals.EntityESP
+local EntityESP = require("Visuals/EntityESP")
 
 ---@module Utility.Configuration
 local Configuration = require("Utility/Configuration")
 
+---@module Utility.Maid
+local Maid = require("Utility/Maid")
+
 ---@module Utility.Logger
 local Logger = require("Utility/Logger")
 
--- Services.
-local Players = game:GetService("Players")
+local Players    = game:GetService("Players")
 local RunService = game:GetService("RunService")
-local CoreGui = game:GetService("CoreGui")
 
 local LocalPlayer = Players.LocalPlayer
 
--- Container name (so previous runs can be cleaned up).
-local CONTAINER_NAME = "__EP_PlayerESP"
+local IDENTIFIER = "EP_ESP_Player_"
 
--- iy-style team colors.
-local ALLY_COLOR = Color3.fromRGB(0, 255, 0)
-local ENEMY_COLOR = Color3.fromRGB(255, 0, 0)
+local ESP_HEALTH            = "[%i/%i]"
+local ESP_HEALTH_PERCENTAGE = "[%i%% hp]"
+local ESP_HEALTH_BARS       = "[%.1f bars]"
+local ESP_POSTURE           = "[posture: %i/%i]"
+local ESP_VIEW_ANGLE        = "[%.2fdot]"
 
----Extract a Color3 from a colorpicker flag value (the library stores the
----colorpicker object, whose actual Color3 lives in `.Color`).
----@param Value any
----@param Fallback Color3
----@return Color3
-local function ToColor3(Value, Fallback)
-	if typeof(Value) == "Color3" then
-		return Value
+-- Cached workspace.Living.
+local CachedLiving = nil
+local function GetLiving()
+	if not CachedLiving or not CachedLiving.Parent then
+		CachedLiving = workspace:FindFirstChild("Living")
 	end
-	if type(Value) == "table" and typeof(Value.Color) == "Color3" then
-		return Value.Color
-	end
-	return Fallback
+	return CachedLiving
 end
 
--- Player ESP module.
-local PlayerESP = {}
-
--- player -> ESPObject registry.
-local Objects = {}
-
--- Engine maid + session guard.
-local EngineMaid = Maid.new()
-local MySession = nil
-local GuiContainer = nil
-
----Resolve the gethui() container if the executor exposes it.
----@return Instance?
-local function TryGetHui()
-	local Ok, Hui = pcall(function()
-		return gethui()
-	end)
-	if Ok then
-		return Hui
-	end
-	return nil
+local function ReadPosture(character)
+	local living = GetLiving()
+	if not living then return nil, nil end
+	local slot   = living:FindFirstChild(character.Name)
+	if not slot  then return nil, nil end
+	local status = slot:FindFirstChild("Status")
+	if not status then return nil, nil end
+	local pv     = status:FindFirstChild("Posture")
+	if not pv    then return nil, nil end
+	local maxPv  = status:FindFirstChild("MaxPosture")
+	return pv.Value, (maxPv and maxPv.Value or 100)
 end
 
----Create the ESP ScreenGui using the same robust parenting sequence as the
----script's working modules (CoreGui -> PlayerGui fallback -> gethui()).
----@return ScreenGui
-local function CreateGuiContainer()
-	local ScreenGui = Instance.new("ScreenGui")
-	ScreenGui.Name = CONTAINER_NAME
-	ScreenGui.ResetOnSpawn = false
-	ScreenGui.DisplayOrder = 10
+-- ── PlayerESP_Obj ─────────────────────────────────────────────────────────────
 
-	pcall(function()
-		ScreenGui.Parent = CoreGui
+---@class PlayerESP_Obj: EntityESP
+local PlayerESP_Obj = setmetatable({}, { __index = EntityESP })
+PlayerESP_Obj.__index = PlayerESP_Obj
+PlayerESP_Obj.__type  = "PlayerESP"
+
+-- Called by EntityESP.setup() — adds PostureBar on the right side.
+PlayerESP_Obj.extra = LPH_NO_VIRTUALIZE(function(self)
+	self.pbar = self:add("PostureBar", "right", 6, function(container)
+		-- vertical = true, no separators
+		self:cgb(container, false, true, Color3.fromRGB(255, 190, 30))
 	end)
-	if not ScreenGui.Parent then
-		ScreenGui.Parent = LocalPlayer:WaitForChild("PlayerGui")
+end)
+
+function PlayerESP_Obj:update()
+	local identifier = IDENTIFIER
+	local player     = self.player
+
+	local model = self.entity
+	if not model or not model.Parent then return self:visible(false) end
+
+	local humanoid = model:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return self:visible(false) end
+
+	local hrp = model:FindFirstChild("HumanoidRootPart")
+	if not hrp then return self:visible(false) end
+
+	-- Resolve display name.
+	local nameType = Configuration.IdOptionValue(identifier, "NameType")
+	local playerName
+	if nameType == "Character Name" then
+		playerName = player:GetAttribute("CharacterName") or "Unknown Character"
+	elseif nameType == "Roblox Display Name" or nameType == "Display Name" then
+		playerName = player.DisplayName
+	else
+		playerName = player.Name
 	end
-	pcall(function()
-		ScreenGui.Parent = gethui()
-	end)
 
-	return ScreenGui
-end
+	self.label = Configuration.IdToggleValue(identifier, "ShowName") ~= false
+		and playerName or ""
 
----Destroy leftover ESP containers from previous runs.
-local function CleanupLeftover()
-	local Parents = { CoreGui, TryGetHui() }
-	pcall(function()
-		Parents[#Parents + 1] = LocalPlayer:FindFirstChild("PlayerGui")
-	end)
+	-- Build text tags.
+	local health    = humanoid.Health
+	local maxHealth = humanoid.MaxHealth
+	local tags      = {}
 
-	for _, Parent in next, Parents do
-		if Parent then
-			local Old = Parent:FindFirstChild(CONTAINER_NAME)
-			while Old do
-				Old:Destroy()
-				Old = Parent:FindFirstChild(CONTAINER_NAME)
+	if Configuration.IdToggleValue(identifier, "ShowHealth") ~= false then
+		tags[#tags + 1] = ESP_HEALTH:format(health, maxHealth)
+	end
+
+	if Configuration.IdToggleValue(identifier, "ShowHealthPercentage") and maxHealth > 0 then
+		tags[#tags + 1] = ESP_HEALTH_PERCENTAGE:format(health / maxHealth * 100)
+	end
+
+	if Configuration.IdToggleValue(identifier, "ShowHealthBarsText") and maxHealth > 0 then
+		tags[#tags + 1] = ESP_HEALTH_BARS:format(math.clamp((health / maxHealth) / 0.20, 0, 5))
+	end
+
+	if Configuration.IdToggleValue(identifier, "ShowPostureText") then
+		local pVal, pMax = ReadPosture(model)
+		if pVal and pMax then
+			tags[#tags + 1] = ESP_POSTURE:format(math.floor(pVal), math.floor(pMax))
+		end
+	end
+
+	if Configuration.IdToggleValue(identifier, "ShowViewAngle") then
+		local localChar = LocalPlayer and LocalPlayer.Character
+		local localRoot = localChar and localChar:FindFirstChild("HumanoidRootPart")
+		if localRoot then
+			local cam     = workspace.CurrentCamera
+			local dot     = cam.CFrame.LookVector:Dot((localRoot.Position - hrp.Position).Unit) * -1
+			tags[#tags + 1] = ESP_VIEW_ANGLE:format(dot)
+		end
+	end
+
+	-- Posture bar visibility (set before EntityESP.update so build() respects it).
+	if self.pbar then
+		self.pbar.Visible = Configuration.IdToggleValue(identifier, "PostureBar") ~= false
+	end
+
+	-- Delegate to EntityESP: distance check, hbar, text, build, visible.
+	EntityESP.update(self, tags)
+
+	-- After build(), posture bar frame exists — update fill and color.
+	if self.pbar and self.pbar.Visible then
+		local pVal, pMax = ReadPosture(model)
+		if pVal and pMax and pMax > 0 then
+			EntityESP.mbs(self.pbar, true, math.clamp(pVal / pMax, 0, 1))
+			local bar = EntityESP.gb(self.pbar)
+			if bar then
+				local pColorFlag = Configuration.IdOptionValue(identifier, "PostureBarColor")
+				bar.BackgroundColor3 = (type(pColorFlag) == "table" and pColorFlag.Color)
+					or (typeof(pColorFlag) == "Color3" and pColorFlag)
+					or Color3.fromRGB(255, 190, 30)
 			end
+		end
+	end
+
+	-- Ally color override (applied after EntityESP.update sets text color).
+	if Configuration.IdToggleValue(identifier, "MarkAllies") then
+		local lt = LocalPlayer and LocalPlayer.Team
+		if lt and player.Team == lt then
+			local allyFlag  = Configuration.IdOptionValue(identifier, "AllyColor")
+			local allyColor = (type(allyFlag) == "table" and allyFlag.Color)
+				or (typeof(allyFlag) == "Color3" and allyFlag)
+				or Color3.fromRGB(0, 255, 0)
+			local nameLbl = self.ncontainer and self.ncontainer:FindFirstChildOfClass("TextLabel")
+			if nameLbl then nameLbl.TextColor3 = allyColor end
 		end
 	end
 end
 
----@class ESPObject
-local ESPObject = {}
-ESPObject.__index = ESPObject
-
----Create an ESP object for a player.
----@param Player Player
----@return ESPObject
-function ESPObject.new(Player)
-	local self = setmetatable({}, ESPObject)
-	self.Player = Player
-	self.Maid = Maid.new()
-	self.Adornments = {} -- part -> BoxHandleAdornment
-	self.LastCharacter = nil
-
-	local Folder = Instance.new("Folder")
-	Folder.Name = Player.Name .. "_ESP"
-	Folder.Parent = GuiContainer
-	self.Folder = self.Maid:Mark(Folder)
-
-	local Billboard = Instance.new("BillboardGui")
-	Billboard.Name = "__EP_Label"
-	Billboard.AlwaysOnTop = true
-	Billboard.Size = UDim2.new(0, 200, 0, 60)
-	Billboard.StudsOffset = Vector3.new(0, 2, 0)
-	Billboard.Enabled = false
-	Billboard.Parent = Folder
-
-	local Label = Instance.new("TextLabel")
-	Label.BackgroundTransparency = 1.0
-	Label.Size = UDim2.new(1, 0, 1, 0)
-	Label.Font = Enum.Font.SourceSansSemibold
-	Label.TextSize = 16
-	Label.TextColor3 = Color3.new(1, 1, 1)
-	Label.TextStrokeTransparency = 0.0
-	Label.TextYAlignment = Enum.TextYAlignment.Bottom
-	Label.Parent = Billboard
-
-	self.Billboard = Billboard
-	self.Label = Label
+---@param player Player
+---@param character Model  must be the character Model (not a Part)
+function PlayerESP_Obj.new(player, character)
+	local base = EntityESP.new(character, IDENTIFIER, "Unknown Player")
+	local self = setmetatable(base, PlayerESP_Obj)
+	self.player = player
+	-- setup() calls extra() on self → PlayerESP_Obj.extra adds pbar.
+	self:setup()
 	return self
 end
 
----Resolve display name based on the configured name type.
----@param Character Model
----@return string
-function ESPObject:ResolveName(Character)
-	local NameType = Configuration.ExpectOptionValue("EP_ESP_Player_NameType") or "Username"
+-- ── Engine ────────────────────────────────────────────────────────────────────
 
-	if NameType == "Display Name" then
-		return self.Player.DisplayName
-	end
-	if NameType == "Character Name" then
-		return self.Player:GetAttribute("CharacterName") or Character.Name or self.Player.Name
-	end
-	return self.Player.Name
+local PlayerESP = {}
+
+local Objects    = {}
+local EngineMaid = Maid.new()
+local MySession  = nil
+
+local function AddPlayer(P, char)
+	if P == LocalPlayer then return end
+	if Objects[P] then Objects[P]:detach() end
+	char = char or P.Character
+	if not char then return end
+	Objects[P] = PlayerESP_Obj.new(P, char)
 end
 
----Resolve box/text color (team logic or custom).
----@return Color3
-function ESPObject:ResolveColor()
-	if Configuration.ExpectToggleValue("EP_ESP_Player_TeamColor") then
-		local LocalTeam = LocalPlayer and LocalPlayer.Team
-		if LocalTeam and self.Player.Team == LocalTeam then
-			return ALLY_COLOR
-		end
-		return ENEMY_COLOR
-	end
-	return ToColor3(Configuration.ExpectOptionValue("EP_ESP_Player_Color"), Color3.new(1, 1, 1))
+local function RemovePlayer(P)
+	local obj = Objects[P]
+	if obj then obj:detach(); Objects[P] = nil end
 end
 
----Destroy all box adornments.
-function ESPObject:ClearAdornments()
-	for Part, Adorn in next, self.Adornments do
-		Adorn:Destroy()
-		self.Adornments[Part] = nil
-	end
+local function SetupPlayer(P)
+	if P == LocalPlayer then return end
+	AddPlayer(P, P.Character)
+	EngineMaid:Mark(P.CharacterAdded:Connect(function(char)
+		AddPlayer(P, char)
+	end))
 end
 
----Create a box adornment for every BasePart that doesn't have one yet.
----@param Character Model
-function ESPObject:BuildAdornments(Character)
-	for _, Part in next, Character:GetChildren() do
-		if Part:IsA("BasePart") and not self.Adornments[Part] then
-			local Adorn = Instance.new("BoxHandleAdornment")
-			Adorn.Name = "__EP_Box"
-			Adorn.Adornee = Part
-			Adorn.AlwaysOnTop = true
-			Adorn.ZIndex = 10
-			Adorn.Size = Part.Size
-			Adorn.Parent = self.Folder
-			self.Adornments[Part] = Adorn
-		end
-	end
-end
-
----Hide everything (billboard + boxes).
-function ESPObject:Hide()
-	self.Billboard.Enabled = false
-	if next(self.Adornments) ~= nil then
-		self:ClearAdornments()
-	end
-end
-
----Update ESP object for this frame.
-function ESPObject:Update()
-	if not Configuration.ExpectToggleValue("EP_ESP_Player_Enable") then
-		return self:Hide()
-	end
-
-	local Character = self.Player.Character
-	if not Character then
-		self.LastCharacter = nil
-		return self:Hide()
-	end
-
-	local Root = Character:FindFirstChild("HumanoidRootPart")
-		or Character:FindFirstChild("UpperTorso")
-		or Character:FindFirstChild("Torso")
-	local Head = Character:FindFirstChild("Head")
-	local Humanoid = Character:FindFirstChildOfClass("Humanoid")
-
-	-- Distance + max distance filter (0 = unlimited).
-	local LocalCharacter = LocalPlayer and LocalPlayer.Character
-	local LocalRoot = LocalCharacter and LocalCharacter:FindFirstChild("HumanoidRootPart")
-	local Distance = nil
-	if LocalRoot and Root then
-		Distance = (LocalRoot.Position - Root.Position).Magnitude
-	end
-
-	local MaxDistance = Configuration.ExpectOptionValue("EP_ESP_Player_MaxDistance")
-	if MaxDistance and MaxDistance > 0 and Distance and Distance > MaxDistance then
-		return self:Hide()
-	end
-
-	-- Rebuild boxes when the character respawned.
-	if self.LastCharacter ~= Character then
-		self:ClearAdornments()
-		self.LastCharacter = Character
-	end
-
-	local Color = self:ResolveColor()
-
-	-- Boxes / chams.
-	if Configuration.ExpectToggleValue("EP_ESP_Player_Boxes") then
-		self:BuildAdornments(Character)
-
-		local Transparency = Configuration.ExpectOptionValue("EP_ESP_Player_BoxTransparency")
-		if type(Transparency) ~= "number" or Transparency ~= Transparency then
-			Transparency = 0.3
-		end
-
-		for Part, Adorn in next, self.Adornments do
-			if Part and Part.Parent then
-				Adorn.Color3 = Color
-				Adorn.Transparency = Transparency
-				Adorn.Visible = true
-			end
-		end
-	elseif next(self.Adornments) ~= nil then
-		self:ClearAdornments()
-	end
-
-	-- Text billboard (Name | Health | Studs).
-	local Segments = {}
-
-	if Configuration.ExpectToggleValue("EP_ESP_Player_ShowName") then
-		Segments[#Segments + 1] = self:ResolveName(Character)
-	end
-	if Configuration.ExpectToggleValue("EP_ESP_Player_ShowHealth") and Humanoid then
-		Segments[#Segments + 1] = "HP: " .. tostring(math.floor(Humanoid.Health + 0.5))
-	end
-	if Configuration.ExpectToggleValue("EP_ESP_Player_ShowDistance") and Distance then
-		Segments[#Segments + 1] = math.floor(Distance) .. " studs"
-	end
-
-	if #Segments > 0 and Head then
-		if self.Billboard.Adornee ~= Head then
-			self.Billboard.Adornee = Head
-		end
-		self.Billboard.Enabled = true
-		self.Label.Text = table.concat(Segments, " | ")
-		self.Label.TextColor3 = Color
-		self.Label.TextSize = Configuration.ExpectOptionValue("EP_ESP_FontSize") or 16
-
-		local FontName = Configuration.ExpectOptionValue("EP_ESP_Font")
-		self.Label.Font = (FontName and Enum.Font[FontName]) or Enum.Font.SourceSansSemibold
-	else
-		self.Billboard.Enabled = false
-	end
-end
-
----Detach ESP object.
-function ESPObject:Detach()
-	self:ClearAdornments()
-	self.Maid:Clean()
-end
-
----Add a player to the ESP registry.
----@param Player Player
-local function AddPlayer(Player)
-	if Player == LocalPlayer then
-		return
-	end
-	if Objects[Player] then
-		return
-	end
-	Objects[Player] = ESPObject.new(Player)
-end
-
----Remove a player from the ESP registry.
----@param Player Player
-local function RemovePlayer(Player)
-	local Object = Objects[Player]
-	if Object then
-		Object:Detach()
-		Objects[Player] = nil
-	end
-end
-
----Initialize the Player ESP engine.
 function PlayerESP.Init()
 	PlayerESP.Detach()
-	CleanupLeftover()
+	MySession = {}
+	getgenv().__EP_ESPSession = MySession
 
-	MySession = getgenv().__EP_ESPSession
+	for _, P in next, Players:GetPlayers() do SetupPlayer(P) end
 
-	GuiContainer = CreateGuiContainer()
-	EngineMaid:Mark(GuiContainer)
-
-	for _, Player in next, Players:GetPlayers() do
-		AddPlayer(Player)
-	end
-
-	EngineMaid:Mark(Players.PlayerAdded:Connect(AddPlayer))
+	EngineMaid:Mark(Players.PlayerAdded:Connect(SetupPlayer))
 	EngineMaid:Mark(Players.PlayerRemoving:Connect(RemovePlayer))
 
 	EngineMaid:Mark(RunService.RenderStepped:Connect(function()
-		-- Self-cancel if a newer instance took over.
-		if getgenv().__EP_ESPSession ~= MySession then
-			PlayerESP.Detach()
-			return
-		end
-
-		for _, Object in next, Objects do
-			Object:Update()
-		end
+		if getgenv().__EP_ESPSession ~= MySession then PlayerESP.Detach(); return end
+		for _, obj in next, Objects do obj:update() end
 	end))
 
 	Logger.Warn("Player ESP initialized.")
 end
 
----Detach the Player ESP engine.
 function PlayerESP.Detach()
-	for Player, Object in next, Objects do
-		Object:Detach()
-		Objects[Player] = nil
-	end
-
+	for P, obj in next, Objects do obj:detach(); Objects[P] = nil end
 	EngineMaid:Clean()
-	GuiContainer = nil
+	MySession = nil
 end
 
 -- Return PlayerESP module.
 return PlayerESP
 end)
+__bundle_register("Visuals/ProximityNotifier", function(require, _LOADED, __bundle_register, __bundle_modules)
+-- Proximity Notifier stub.
+local ProximityNotifier = {}
+function ProximityNotifier.Init() end
+function ProximityNotifier.Detach() end
+return ProximityNotifier
+end)
 __bundle_register("Visuals/VisualsTab", function(require, _LOADED, __bundle_register, __bundle_modules)
--- Visuals tab: Player ESP + Movement UI (kenduap/Epiphyllum library style).
+-- Visuals tab: Player ESP + Mob ESP + NPC ESP + Proximity Notifier + Distance HUD + Movement UI.
 
 ---@module Visuals.PlayerESP
 local PlayerESP = require("Visuals/PlayerESP")
+
+---@module Visuals.MobESP
+local MobESP = require("Visuals/MobESP")
+
+---@module Visuals.NpcESP
+local NpcESP = require("Visuals/NpcESP")
+
+---@module Visuals.ProximityNotifier
+local ProximityNotifier = require("Visuals/ProximityNotifier")
+
+---@module Visuals.DistanceHUD
+local DistanceHUD = require("Visuals/DistanceHUD")
 
 ---@module Visuals.Movement
 local Movement = require("Visuals/Movement")
@@ -74622,7 +74862,6 @@ local Configuration = require("Utility/Configuration")
 -- Visuals tab.
 local VisualsTab = {}
 
----Build the list of usable font names.
 ---@return string[]
 local function BuildFontList()
 	local Fonts = {}
@@ -74634,7 +74873,6 @@ local function BuildFontList()
 	return Fonts
 end
 
----Initialize ESP Customization section (global render options).
 ---@param Section table
 function VisualsTab.InitCustomizationSection(Section)
 	Section:Slider({
@@ -74653,9 +74891,17 @@ function VisualsTab.InitCustomizationSection(Section)
 		Default = "Code",
 		Multi = false,
 	})
+
+	Section:Slider({
+		Name = "ESP Split Line Length",
+		Flag = "EP_ESP_SplitLineLength",
+		Min = 20,
+		Max = 120,
+		Default = 60,
+		Decimals = 1,
+	})
 end
 
----Initialize Player ESP section.
 ---@param Section table
 function VisualsTab.InitPlayerESPSection(Section)
 	local EnableToggle = Section:Toggle({
@@ -74669,9 +74915,7 @@ function VisualsTab.InitPlayerESPSection(Section)
 		Flag = "EP_ESP_Player_Keybind",
 		Default = nil,
 		Callback = function(_Toggled, FromPress)
-			if not FromPress then
-				return
-			end
+			if not FromPress then return end
 			local Current = Configuration.ExpectToggleValue("EP_ESP_Player_Enable")
 			EnableToggle:Set(not Current)
 		end,
@@ -74679,80 +74923,152 @@ function VisualsTab.InitPlayerESPSection(Section)
 
 	local DepBox = Section:DependencyBox()
 
-	-- Bright boxes (chams) on every part, like Infinite Yield.
-	DepBox:Toggle({
-		Name = "Chams (Boxes)",
-		Flag = "EP_ESP_Player_Boxes",
-		Default = true,
-	})
+	-- Bounding box.
+	DepBox:Toggle({ Name = "Bounding Box", Flag = "EP_ESP_Player_BoundingBox", Default = true })
 
-	DepBox:Slider({
-		Name = "Box Transparency",
-		Flag = "EP_ESP_Player_BoxTransparency",
-		Min = 0,
-		Max = 1,
-		Default = 0.3,
-		Decimals = 0.05,
-	})
-
-	-- Text tags (Name | Health | Studs).
-	DepBox:Toggle({
-		Name = "Show Name",
-		Flag = "EP_ESP_Player_ShowName",
-		Default = true,
-	})
-
+	-- Name.
+	DepBox:Toggle({ Name = "Show Name", Flag = "EP_ESP_Player_ShowName", Default = true })
 	DepBox:Dropdown({
-		Name = "Name Type",
-		Flag = "EP_ESP_Player_NameType",
-		Items = { "Username", "Display Name", "Character Name" },
-		Default = "Username",
-		Multi = false,
+		Name = "Name Type", Flag = "EP_ESP_Player_NameType",
+		Items = { "Username", "Roblox Display Name", "Character Name" },
+		Default = "Username", Multi = false,
 	})
 
-	DepBox:Toggle({
-		Name = "Show Health",
-		Flag = "EP_ESP_Player_ShowHealth",
-		Default = true,
-	})
+	-- Health bar (visual, left side).
+	DepBox:Toggle({ Name = "Health Bar", Flag = "EP_ESP_Player_HealthBar", Default = true })
+	DepBox:Label("Full HP Color"):Colorpicker({ Flag = "EP_ESP_Player_FullColor",  Default = Color3.fromRGB(0, 220, 70) })
+	DepBox:Label("Empty HP Color"):Colorpicker({ Flag = "EP_ESP_Player_EmptyColor", Default = Color3.fromRGB(220, 0, 0) })
 
-	DepBox:Toggle({
-		Name = "Show Distance",
-		Flag = "EP_ESP_Player_ShowDistance",
-		Default = true,
+	-- Posture bar (visual, right side).
+	DepBox:Toggle({ Name = "Posture Bar", Flag = "EP_ESP_Player_PostureBar", Default = true })
+	DepBox:Label("Posture Bar Color"):Colorpicker({ Flag = "EP_ESP_Player_PostureBarColor", Default = Color3.fromRGB(255, 190, 30) })
+
+	-- Health text tags.
+	DepBox:Toggle({ Name = "Show Health [X/X]",      Flag = "EP_ESP_Player_ShowHealth",           Default = true })
+	DepBox:Toggle({ Name = "Show Health %",           Flag = "EP_ESP_Player_ShowHealthPercentage", Default = false })
+	DepBox:Toggle({ Name = "Show Health Bars [0-5]", Flag = "EP_ESP_Player_ShowHealthBarsText",   Default = false })
+
+	-- Posture text tag.
+	DepBox:Toggle({ Name = "Show Posture [text]", Flag = "EP_ESP_Player_ShowPostureText", Default = false })
+
+	-- Misc.
+	DepBox:Toggle({ Name = "Show View Angle", Flag = "EP_ESP_Player_ShowViewAngle", Default = false })
+
+	-- Distance.
+	DepBox:Toggle({ Name = "Show Distance", Flag = "EP_ESP_Player_ShowDistance", Default = true })
+	DepBox:Slider({
+		Name = "Max Distance (0 = unlimited)", Flag = "EP_ESP_Player_MaxDistance",
+		Min = 0, Max = 100000, Default = 0, Decimals = 1, Suffix = " studs",
 	})
 
 	-- Colors.
-	DepBox:Toggle({
-		Name = "Team Color (green ally / red enemy)",
-		Flag = "EP_ESP_Player_TeamColor",
-		Default = false,
-	})
+	DepBox:Toggle({ Name = "Team Color (green/red)", Flag = "EP_ESP_Player_TeamColor", Default = false })
+	DepBox:Label("Player Color"):Colorpicker({ Flag = "EP_ESP_Player_Color", Default = Color3.fromRGB(255, 255, 255) })
+	DepBox:Toggle({ Name = "Mark Allies", Flag = "EP_ESP_Player_MarkAllies", Default = false })
+	DepBox:Label("Ally Color"):Colorpicker({ Flag = "EP_ESP_Player_AllyColor", Default = Color3.fromRGB(0, 255, 0) })
 
-	DepBox:Label("Player Color"):Colorpicker({
-		Flag = "EP_ESP_Player_Color",
-		Default = Color3.fromRGB(255, 255, 255),
+	DepBox:SetupDependencies({ { EnableToggle, true } })
+end
+
+---@param Section table
+function VisualsTab.InitMobESPSection(Section)
+	local EnableToggle = Section:Toggle({ Name = "Enabled", Flag = "EP_ESP_Mob_Enable", Default = false })
+
+	local DepBox = Section:DependencyBox()
+
+	DepBox:Toggle({ Name = "Show Name",   Flag = "EP_ESP_Mob_ShowName",   Default = true })
+	DepBox:Toggle({ Name = "Show Health", Flag = "EP_ESP_Mob_ShowHealth", Default = true })
+	DepBox:Toggle({ Name = "Health Bar",  Flag = "EP_ESP_Mob_HealthBar",  Default = true })
+
+	DepBox:Label("Mob Color"):Colorpicker({
+		Flag = "EP_ESP_Mob_Color",
+		Default = Color3.fromRGB(255, 165, 0),
 	})
 
 	DepBox:Slider({
 		Name = "Max Distance (0 = unlimited)",
-		Flag = "EP_ESP_Player_MaxDistance",
-		Min = 0,
-		Max = 100000,
-		Default = 0,
-		Decimals = 1,
-		Suffix = " studs",
+		Flag = "EP_ESP_Mob_MaxDistance",
+		Min = 0, Max = 100000, Default = 0, Decimals = 1, Suffix = " studs",
 	})
 
-	DepBox:SetupDependencies({
-		{ EnableToggle, true },
-	})
+	DepBox:SetupDependencies({ { EnableToggle, true } })
 end
 
----Initialize Movement section (WalkSpeed, Fly, Noclip).
+---@param Section table
+function VisualsTab.InitNpcESPSection(Section)
+	local EnableToggle = Section:Toggle({ Name = "Enabled", Flag = "EP_ESP_Npc_Enable", Default = false })
+
+	local DepBox = Section:DependencyBox()
+
+	DepBox:Label("NPC Color"):Colorpicker({
+		Flag = "EP_ESP_Npc_Color",
+		Default = Color3.fromRGB(0, 200, 255),
+	})
+
+	DepBox:Slider({
+		Name = "Max Distance (0 = unlimited)",
+		Flag = "EP_ESP_Npc_MaxDistance",
+		Min = 0, Max = 100000, Default = 0, Decimals = 1, Suffix = " studs",
+	})
+
+	DepBox:SetupDependencies({ { EnableToggle, true } })
+end
+
+---@param Section table
+function VisualsTab.InitNotificationsSection(Section)
+	local EnableToggle = Section:Toggle({
+		Name = "Proximity Alert",
+		Flag = "EP_Proximity_Enable",
+		Default = false,
+	})
+
+	local DepBox = Section:DependencyBox()
+
+	DepBox:Toggle({ Name = "Show Panel", Flag = "EP_Proximity_ShowPanel", Default = true })
+	DepBox:Toggle({ Name = "Beep Sound", Flag = "EP_Proximity_Beep",      Default = false })
+
+	DepBox:Slider({
+		Name = "Beep Volume",
+		Flag = "EP_Proximity_BeepVolume",
+		Min = 0, Max = 1, Default = 0.5, Decimals = 0.05,
+	})
+
+	DepBox:Slider({
+		Name = "Range (studs)",
+		Flag = "EP_Proximity_Range",
+		Min = 10, Max = 1000, Default = 350, Decimals = 1, Suffix = " studs",
+	})
+
+	DepBox:SetupDependencies({ { EnableToggle, true } })
+end
+
+---@param Section table
+function VisualsTab.InitDebugSection(Section)
+	local EnableToggle = Section:Toggle({
+		Name = "Distance HUD",
+		Flag = "EP_DistanceHUD_Enable",
+		Default = false,
+	})
+
+	local DepBox = Section:DependencyBox()
+
+	DepBox:Slider({
+		Name = "Max Distance (0 = unlimited)",
+		Flag = "EP_DistanceHUD_MaxDistance",
+		Min = 0, Max = 10000, Default = 0, Decimals = 1, Suffix = " studs",
+	})
+
+	DepBox:Slider({
+		Name = "Max Entries",
+		Flag = "EP_DistanceHUD_MaxCount",
+		Min = 1, Max = 20, Default = 8, Decimals = 1,
+	})
+
+	DepBox:SetupDependencies({ { EnableToggle, true } })
+end
+
 ---@param Section table
 function VisualsTab.InitMovementSection(Section)
-	-- WalkSpeed.
 	local WalkSpeedToggle = Section:Toggle({
 		Name = "WalkSpeed",
 		Flag = "EP_Move_WalkSpeed_Enable",
@@ -74764,17 +75080,11 @@ function VisualsTab.InitMovementSection(Section)
 	WalkSpeedBox:Slider({
 		Name = "WalkSpeed Value",
 		Flag = "EP_Move_WalkSpeed",
-		Min = 16,
-		Max = 200,
-		Default = 50,
-		Decimals = 1,
+		Min = 16, Max = 200, Default = 50, Decimals = 1,
 	})
 
-	WalkSpeedBox:SetupDependencies({
-		{ WalkSpeedToggle, true },
-	})
+	WalkSpeedBox:SetupDependencies({ { WalkSpeedToggle, true } })
 
-	-- Fly.
 	local FlyToggle = Section:Toggle({
 		Name = "Fly",
 		Flag = "EP_Move_Fly_Enable",
@@ -74786,9 +75096,7 @@ function VisualsTab.InitMovementSection(Section)
 		Flag = "EP_Move_Fly_Keybind",
 		Default = nil,
 		Callback = function(_Toggled, FromPress)
-			if not FromPress then
-				return
-			end
+			if not FromPress then return end
 			local Current = Configuration.ExpectToggleValue("EP_Move_Fly_Enable")
 			FlyToggle:Set(not Current)
 		end,
@@ -74799,17 +75107,11 @@ function VisualsTab.InitMovementSection(Section)
 	FlyBox:Slider({
 		Name = "Fly Speed",
 		Flag = "EP_Move_Fly_Speed",
-		Min = 10,
-		Max = 200,
-		Default = 50,
-		Decimals = 1,
+		Min = 10, Max = 200, Default = 50, Decimals = 1,
 	})
 
-	FlyBox:SetupDependencies({
-		{ FlyToggle, true },
-	})
+	FlyBox:SetupDependencies({ { FlyToggle, true } })
 
-	-- Noclip.
 	local NoclipToggle = Section:Toggle({
 		Name = "Noclip",
 		Flag = "EP_Move_Noclip_Enable",
@@ -74821,9 +75123,7 @@ function VisualsTab.InitMovementSection(Section)
 		Flag = "EP_Move_Noclip_Keybind",
 		Default = nil,
 		Callback = function(_Toggled, FromPress)
-			if not FromPress then
-				return
-			end
+			if not FromPress then return end
 			local Current = Configuration.ExpectToggleValue("EP_Move_Noclip_Enable")
 			NoclipToggle:Set(not Current)
 		end,
@@ -74841,18 +75141,42 @@ function VisualsTab.Init(Window, Icons)
 	VisualsTab.InitCustomizationSection(
 		Page:Section({ Name = "ESP Customization", Side = 1, Icon = Icons["sliders-horizontal"] or "", Collapsible = false })
 	)
-
 	VisualsTab.InitPlayerESPSection(
 		Page:Section({ Name = "Player ESP", Side = 2, Icon = Icons["users-round"] or "" })
 	)
-
+	VisualsTab.InitMobESPSection(
+		Page:Section({ Name = "Mob ESP", Side = 2, Icon = Icons["skull"] or "" })
+	)
+	VisualsTab.InitNpcESPSection(
+		Page:Section({ Name = "NPC ESP", Side = 2, Icon = Icons["message-square"] or "" })
+	)
 	VisualsTab.InitMovementSection(
 		Page:Section({ Name = "Movement", Side = 1, Icon = Icons["zap"] or "" })
 	)
+	VisualsTab.InitNotificationsSection(
+		Page:Section({ Name = "Notifications", Side = 1, Icon = Icons["bell"] or "" })
+	)
+	VisualsTab.InitDebugSection(
+		Page:Section({ Name = "Debug", Side = 2, Icon = Icons["bug"] or "" })
+	)
 
-	-- Start the engines (they read their Enable flags each frame).
+	-- Start engines (each reads its Enable flag each frame).
 	PlayerESP.Init()
+	MobESP.Init()
+	NpcESP.Init()
+	ProximityNotifier.Init()
+	DistanceHUD.Init()
 	Movement.Init()
+end
+
+---Detach the Visuals tab.
+function VisualsTab.Detach()
+	Movement.Detach()
+	DistanceHUD.Detach()
+	ProximityNotifier.Detach()
+	NpcESP.Detach()
+	MobESP.Detach()
+	PlayerESP.Detach()
 end
 
 -- Return VisualsTab module.
@@ -74912,6 +75236,12 @@ function Epiphyllum.Init()
 	local Defense = require("Core/Defense")
 	Defense.Init()
 
+	-- Initialize Visuals tab (ESP + Movement) if a window was provided.
+	if _Config.Window then
+		local VisualsTab = require("Visuals/VisualsTab")
+		VisualsTab.Init(_Config.Window, _Config.Icons)
+	end
+
 	-- Initialize Builder UI if a window was provided.
 	if _Config.Window then
 		local BuilderTab = require("Builder/BuilderTab")
@@ -74927,6 +75257,12 @@ end
 
 ---Detach the Epiphyllum.
 function Epiphyllum.Detach()
+	-- Detach Visuals tab.
+	if _Config.Window then
+		local VisualsTab = require("Visuals/VisualsTab")
+		VisualsTab.Detach()
+	end
+
 	-- Detach Defense.
 	local Defense = require("Core/Defense")
 	Defense.Detach()
@@ -74953,7 +75289,6 @@ __bundle_register("__root", function(require, _LOADED, __bundle_register, __bund
 -- Hot reload: unload previous instance.
 local Environment = getgenv()
 
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 ---Unload script modules from a registry.
 ---@param ScriptModules table?
 local function UnloadScriptModules(ScriptModules)
@@ -75096,7 +75431,6 @@ end
 if Environment._EpiphyllumLib or Environment._EpiphyllumRuntime or Environment.__EpiphyllumScriptModules then
 	UnloadPreviousRuntime()
 end
-end -- scope block
 
 -- Clean up leftover UI from previous runs (search all possible parents).
 pcall(function()
@@ -75117,8 +75451,6 @@ end)
 local EpSessionId = game:GetService("HttpService"):GenerateGUID(false)
 getgenv().__EP_SimulationSession = EpSessionId
 getgenv().__EP_MusicSession = EpSessionId
-getgenv().__EP_ESPSession = EpSessionId
-getgenv().__EP_MovementSession = EpSessionId
 task.wait()
 pcall(function()
 	for Index, Child in next, workspace:GetChildren() do
@@ -75164,9 +75496,6 @@ local Logger = require("Utility/Logger")
 local Configuration = require("Utility/Configuration")
 local Library = require("GUI/Library")
 local SaveManager = require("Timings/SaveManager")
-local VisualsTab = require("Visuals/VisualsTab")
-local DefaultConfig = require("GUI/DefaultConfig")
-local BuildDefaultRemotes = require("Core/DefaultRemotes")
 
 -- Set library reference for Configuration.
 Configuration.SetLibrary(Library)
@@ -75318,7 +75647,6 @@ getgenv().EpiphyllumSkipIntroAnimation = SkipIntroAnimation
 getgenv().EpiphyllumLaunchMenuLocked = true
 
 -- Place ID alias resolution — scan game folders for aliases.json containing this PlaceId.
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local PlaceIdStr = tostring(PlaceId)
 local AliasGamePath = nil
 local AliasGameFolderName = nil
@@ -75381,7 +75709,6 @@ if AliasGamePath then
 	GamePath = AliasGamePath
 	GameFolderName = AliasGameFolderName
 end
-end -- scope block
 
 -- Base64 decode lookup.
 local Base64Chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
@@ -75637,7 +75964,6 @@ local PlayMusicSource = nil
 ---@param Stream table
 ---@param RequestId number
 ---@param Source string
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local function StartMusicStream(Stream, RequestId, Source)
 	StopMusicStream()
 	BgMusic:Stop()
@@ -75896,10 +76222,7 @@ function PlayMusicSource(Source, PlaylistVideoIds, PlaylistIndex)
 	end)
 end
 
-end -- scope block
-
 -- Write global modules to workspace (per-game).
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local GlobalsPath = GamePath .. "/Modules/Globals"
 
 local GlobalModules = {
@@ -76150,7 +76473,6 @@ for Name, Content in next, GlobalModules do
 		writefile(Path, Content)
 	end
 end
-end -- scope block
 
 -- Action types.
 -- Action to internal name mapping.
@@ -76169,7 +76491,6 @@ local ActionToInternal = {
 	Crouch = "crouch",
 	["Start Crouch"] = "startcrouch",
 	["End Crouch"] = "endcrouch",
-	FlashStep = "flashstep",
 }
 
 -- Action to filter category mapping.
@@ -76188,7 +76509,6 @@ local ActionToCategory = {
 	Crouch = "Crouch",
 	["Start Crouch"] = "Crouch",
 	["End Crouch"] = "Crouch",
-	FlashStep = "FlashStep",
 }
 
 -- Internal action to filter category mapping.
@@ -76207,7 +76527,6 @@ local InternalToCategory = {
 	crouch = "Crouch",
 	startcrouch = "Crouch",
 	endcrouch = "Crouch",
-	flashstep = "FlashStep",
 }
 
 ---Normalize an action string.
@@ -76264,19 +76583,30 @@ end
 
 ---Load saved config from workspace.
 ---@return table
+local DEFAULT_CONFIG = {
+	remotes = {
+		{ path = "game.ReplicatedStorage.Requests.Combat",    action = "Parry",   args = { '"Block"', "true" } },
+		{ path = "game.ReplicatedStorage.Requests.RedCounter", action = "Counter", args = {} },
+		{ path = "game.ReplicatedStorage.Requests.Dash",      action = "Dodge",   args = { '"LookVector"', "-73" } },
+	},
+	inputs = {
+		{ action = "Block",   key = "MouseButton2" },
+		{ action = "Unblock", key = "MouseButton2" },
+	},
+}
+
 local function LoadConfig()
 	local FilePath = GamePath .. "/remotes.json"
 
 	if not isfile(FilePath) then
-		-- No local dispatch config: force the baked-in default remotes/inputs.
-		return BuildDefaultRemotes()
+		return DEFAULT_CONFIG
 	end
 
 	local Success, Result = pcall(function()
 		return HttpService:JSONDecode(readfile(FilePath))
 	end)
 
-	if not Success then return { remotes = {}, inputs = {} } end
+	if not Success then return DEFAULT_CONFIG end
 
 	-- New format: has remotes array.
 	if Result.remotes then
@@ -76295,7 +76625,7 @@ local function LoadConfig()
 			}
 		elseif typeof(Value) == "table" then
 			for Index, Entry in next, Value do
-				if Entry.path and Entry.path ~= "" then
+				if type(Entry) == "table" and Entry.path and Entry.path ~= "" then
 					Config.remotes[#Config.remotes + 1] = {
 						action = Name:sub(1, 1):upper() .. Name:sub(2),
 						path = Entry.path,
@@ -76887,10 +77217,6 @@ local function BuildTimingActionTypes()
 		AddTimingActionType(Values, Seen, "End Crouch")
 	end
 
-	if InternalActions.flashstep then
-		AddTimingActionType(Values, Seen, "FlashStep")
-	end
-
 	local CoveredInternalActions = {
 		parry = true,
 		dodge = true,
@@ -76906,7 +77232,6 @@ local function BuildTimingActionTypes()
 		crouch = true,
 		startcrouch = true,
 		endcrouch = true,
-		flashstep = true,
 	}
 
 	local ExtraValues = {}
@@ -77235,7 +77560,9 @@ local function ReloadDispatchConfigurationFromDisk()
 
 	if #SavedConfig.remotes > 0 then
 		for Index, Saved in next, SavedConfig.remotes do
-			CreateRemoteEntry(RemoteContainer, Saved.action, Saved.path, Saved.args)
+			if type(Saved) == "table" then
+				CreateRemoteEntry(RemoteContainer, Saved.action, Saved.path, Saved.args)
+			end
 		end
 	else
 		CreateRemoteEntry(RemoteContainer, "Parry", "", {})
@@ -77331,7 +77658,13 @@ local function ApplyAll()
 		InputCount = InputCount + 1
 	end
 
-	if ResolvedRemotes.parry and #ResolvedRemotes.parry > 0 then
+	if require("Core/CombatParry").IsAvailable() then
+		-- This game runs the CombatSystemClient: always parry via the live Block
+		-- module (fresh auth tokens + configurable hold window). Overrides any
+		-- GUI-configured parry remote/key, which can't hold/token correctly here.
+		Callbacks.parry = require("Core/CombatParry").CreateCallback()
+		InputCount = InputCount + 1
+	elseif ResolvedRemotes.parry and #ResolvedRemotes.parry > 0 then
 		Callbacks.parry = CreateBlockTapCallback()
 	end
 
@@ -77357,14 +77690,6 @@ end
 Library.Folders.Directory = FolderName
 Library.Folders.Configs = FolderName .. "/Configs"
 if not isfolder(Library.Folders.Configs) then makefolder(Library.Folders.Configs) end
-
--- Seed the embedded default config to disk so it appears in the Configs list.
-pcall(function()
-	local DefaultPath = Library.Folders.Configs .. "/" .. DefaultConfig.Name
-	if not isfile(DefaultPath) then
-		writefile(DefaultPath, DefaultConfig.Json)
-	end
-end)
 
 Library.Icons["minimize"] = IconAssets["minimize"] or ""
 Library.Icons["x"] = IconAssets["x"] or ""
@@ -77577,17 +77902,10 @@ if not IsSilentModeSuppressed() and not SkipIntroAnimation then
 	end)
 end
 
--- =========================================================================
--- BUILD ID — BUMP THIS ON EVERY UPDATE so you can tell who is on the latest
--- build. Shown top-left in the menu (under the title) and in the watermark.
--- =========================================================================
-local BUILD_ID = "2026.06.10b"
-getgenv().__EP_BuildId = BUILD_ID
-
 -- Create window.
 local Window = Library:Window({
 	Name = "Epiphyllum",
-	SubName = GameName .. "  ·  build " .. BUILD_ID,
+	SubName = GameName,
 	Logo = IconAssets["sprout"] or "120959262762131",
 })
 
@@ -77604,7 +77922,6 @@ InfoLogger.Init(GamePath)
 Window:Category("Combat")
 
 -- Defense page.
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local DefensePage = Window:Page({ Name = "Defense", Icon = IconAssets["shield"] or "" })
 
 -- Auto Defense section (section toggle = feature toggle).
@@ -77975,7 +78292,6 @@ InputSection:Button({
 		Library:Notification({ Title = "Error", Description = string.format("No input configured for '%s'.", Action), Duration = 3 })
 	end,
 })
-end -- scope block
 
 -- Hook Logger notifications to Library.
 Logger.SetNotifyCallback(function(Message, Duration)
@@ -78012,13 +78328,9 @@ getgenv()._EpiphyllumRuntime = Epiphyllum
 -- Apply saved dispatch config after init because init resets the Remotes module.
 RefreshDispatchConfiguration()
 
--- Visuals page (Player ESP).
-VisualsTab.Init(Window, IconAssets)
-
 Window:Category("Utilities")
 
 -- Scripts page.
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local ScriptsPage = Window:Page({ Name = "Scripts", Icon = IconAssets["terminal"] or "" })
 local ScriptsSection = ScriptsPage:Section({ Name = "Scripts", Side = 1, Icon = IconAssets["zap"] or "", Collapsible = false })
 
@@ -78071,7 +78383,6 @@ ScriptsSection:Button({
 		RegisterScriptModule("MCPConnector", Module)
 	end,
 })
-end -- scope block
 
 Window:Category("Configuration")
 
@@ -78133,7 +78444,6 @@ MusicSection:Slider({
 	end,
 })
 
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local MusicSourceReady = false
 local MusicSourceTextbox = MusicSection:Textbox({
 	Flag = "EP_MusicSource",
@@ -78164,14 +78474,12 @@ MusicPlayButton:AddButton({
 		MusicSourceTextbox:Set("")
 	end,
 })
-end -- scope block
 
 -- Forward declarations for callbacks that reference later-created objects.
 local Watermark
 local WatermarkReady = false
 
 ---Apply silent-mode controlled UI visibility.
-do -- scope block: release locals at end to stay under Luau's 200-register chunk limit
 local function ApplySilentModeUi()
 	local Suppressed = IsSilentModeSuppressed()
 
@@ -78364,7 +78672,6 @@ ShowKeybindListDepBox:Keybind({
 	end,
 })
 ShowKeybindListDepBox:SetupDependencies({ { ShowKeybindListToggle, true } })
-end -- scope block
 
 -- Theme.
 local ThemeSection = SettingsPage:Section({ Name = "Theme", Side = 1, Icon = IconAssets["palette"] or "", Collapsible = false })
@@ -78496,7 +78803,7 @@ ConfigsSection:Button({
 	end,
 })
 
----Load autoload config, falling back to the embedded default when none is set.
+---Load autoload config.
 local function LoadAutoloadConfig()
 	local AutoloadPath = Library.Folders.Configs .. "/autoload.txt"
 	if isfile(AutoloadPath) then
@@ -78505,21 +78812,14 @@ local function LoadAutoloadConfig()
 		if AutoloadName and AutoloadName ~= "" and isfile(ConfigPath) then
 			Library:LoadConfig(readfile(ConfigPath))
 			ReloadDispatchConfigurationFromDisk()
-			return
 		end
 	end
-
-	-- No personal autoload set: apply the embedded default config.
-	pcall(function()
-		Library:LoadConfig(DefaultConfig.Json)
-		ReloadDispatchConfigurationFromDisk()
-	end)
 end
 
 Library:RefreshConfigsList(ConfigsDropdown)
 
 -- Watermark (hidden until fully ready).
-local WatermarkTitle = "Epiphyllum · build " .. BUILD_ID
+local WatermarkTitle = "Epiphyllum"
 Watermark = Library:Watermark(WatermarkTitle)
 Watermark:SetVisibility(false)
 
@@ -78557,8 +78857,8 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- Initialize window.
-LoadAutoloadConfig()
 Window:Init()
+task.defer(LoadAutoloadConfig)
 getgenv().EpiphyllumLaunchMenuLocked = false
 
 if not IsSilentModeSuppressed() and ShowMenuOnLaunch then
